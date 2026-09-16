@@ -54,6 +54,21 @@
             font-weight: bold;
             color: #2c3e50;
         }
+        /* Bara de progres pentru abonament */
+        .progress-container {
+            width: 100%;
+            background-color: #ddd;
+            border-radius: 10px;
+            height: 12px;
+            margin-top: 8px;
+            overflow: hidden;
+        }
+        .progress-bar {
+            height: 100%;
+            background-color: #27ae60;
+            width: 0%;
+            transition: width 0.4s ease;
+        }
         form {
             display: grid;
             grid-template-columns: 1fr 1fr;
@@ -151,6 +166,13 @@
             <h3>Cost Mediu</h3>
             <p id="statAvgCost">- RON/100km</p>
         </div>
+        <div class="stat-card full-width" style="border-left-color: #27ae60;">
+            <h3>Consum Ciclul Curent (120 kWh Inclusi)</h3>
+            <p id="statCurrentCycleKwh">0 / 120 kWh (0%)</p>
+            <div class="progress-container">
+                <div id="cycleProgressBar" class="progress-bar"></div>
+            </div>
+        </div>
     </div>
 
     <form id="chargeForm">
@@ -219,11 +241,10 @@
 </div>
 
 <script>
-    // Configurări Abonament
-    const COST_ABONAMENT_LUNAR = 200;  // RON per ciclu
-    const KWH_INCLUSE_LUNAR = 120;      // kWh per ciclu
-    const TARIF_DEPASIRE_PER_KWH = 2.0; // RON/kWh extras
-    const ZIUA_INCEPUT_ABONAMENT = 14;  // Resetare în data de 14 a fiecărei luni
+    const COST_ABONAMENT_LUNAR = 200;
+    const KWH_INCLUSE_LUNAR = 120;
+    const TARIF_DEPASIRE_PER_KWH = 2.0;
+    const ZIUA_INCEPUT_ABONAMENT = 14;
 
     const firebaseConfig = {
         apiKey: "AIzaSyDIlGRpQGWtfdwrfZ3bllzM168UrcSyrkE",
@@ -248,11 +269,10 @@
     let chartInstance = null;
     let currentLogs = [];
 
-    // Determină cheia unică a ciclului de abonament (ex: "2026-9" pentru 14 Sept - 13 Oct 2026)
     function getSubscriptionCycleKey(dateString) {
         const d = new Date(dateString);
         let year = d.getFullYear();
-        let month = d.getMonth(); // 0-indexed (0 = Jan, 8 = Sep)
+        let month = d.getMonth();
 
         if (d.getDate() < ZIUA_INCEPUT_ABONAMENT) {
             month -= 1;
@@ -359,7 +379,7 @@
                 sessionCost = Number(log.manualCost) || 0;
             }
 
-            return { ...log, computedCost: sessionCost };
+            return { ...log, computedCost: sessionCost, cycleKey: cycleKey };
         });
 
         processedLogs.forEach((log, index) => {
@@ -403,6 +423,20 @@
 
         document.getElementById('statTotalCost').innerText = grandTotalCost.toFixed(2) + ' RON';
         document.getElementById('statTotalKwh').innerText = totalKwh.toFixed(2) + ' kWh';
+
+        // Actualizare Bară Progres Ciclul Curent
+        const currentCycleKey = getSubscriptionCycleKey(new Date().toISOString());
+        const currentCycleKwh = cycleKwhTracker[currentCycleKey] || 0;
+        const percentage = Math.min(100, (currentCycleKwh / KWH_INCLUSE_LUNAR) * 100);
+        
+        document.getElementById('statCurrentCycleKwh').innerText = `${currentCycleKwh.toFixed(2)} / ${KWH_INCLUSE_LUNAR} kWh (${percentage.toFixed(1)}%)`;
+        const progressBar = document.getElementById('cycleProgressBar');
+        progressBar.style.width = percentage + '%';
+        if (percentage >= 100) {
+            progressBar.style.backgroundColor = '#e74c3c'; // Roșu la depășire
+        } else {
+            progressBar.style.backgroundColor = '#27ae60'; // Verde în limită
+        }
 
         if (processedLogs.length > 1) {
             const totalDist = processedLogs[processedLogs.length - 1].km - processedLogs[0].km;
