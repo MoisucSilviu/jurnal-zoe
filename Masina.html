@@ -4,6 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Jurnal Încărcare Renault Zoe</title>
+    
+    <!-- Librăriile Firebase web (CDN) -->
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -59,12 +64,6 @@
         .btn-primary:hover {
             background-color: #219150;
         }
-        .btn-export {
-            background-color: #2980b9;
-            color: white;
-            margin-top: 15px;
-            width: 100%;
-        }
         .btn-delete {
             background-color: #e74c3c;
             color: white;
@@ -97,7 +96,7 @@
 <body>
 
 <div class="container">
-    <h1>Jurnal Încărcare Zoe (2013)</h1>
+    <h1>Jurnal Încărcare Zoe (Cloud Sync)</h1>
 
     <form id="chargeForm">
         <div>
@@ -148,37 +147,72 @@
             </tbody>
         </table>
     </div>
-
-    <button id="exportBtn" class="btn btn-export">Descarcă Datele în Excel (CSV)</button>
 </div>
 
 <script>
+    // Configurația Firebase cu cheile tale specifice
+    const firebaseConfig = {
+        apiKey: "AIzaSyDIlGRpQGWtfdwrfZ3bllzM168UrcSyrkE",
+        authDomain: "zoe-charge-log.firebaseapp.com",
+        projectId: "zoe-charge-log",
+        storageBucket: "zoe-charge-log.firebasestorage.app",
+        messagingSenderId: "291247420360",
+        appId: "1:291247420360:web:bd06ec76d83b6969ea86fd",
+        measurementId: "G-4959FJEPFZ"
+    };
+
+    // Inițializare Firebase & Firestore
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+    const collectionRef = db.collection('incarcari_zoe');
+
     const form = document.getElementById('chargeForm');
     const tableBody = document.querySelector('#logsTable tbody');
-    const exportBtn = document.getElementById('exportBtn');
 
-    function getLogs() {
-        const logs = localStorage.getItem('zoe_logs');
-        return logs ? JSON.parse(logs) : [];
+    // Trimite o înregistrare nouă în Firestore
+    form.addEventListener('submit', async function(event) {
+        event.preventDefault();
+
+        const logEntry = {
+            date: document.getElementById('date').value,
+            km: Number(document.getElementById('km').value),
+            batteryStart: Number(document.getElementById('batteryStart').value),
+            batteryEnd: Number(document.getElementById('batteryEnd').value),
+            kwh: Number(document.getElementById('kwh').value),
+            cost: Number(document.getElementById('cost').value),
+            createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        };
+
+        try {
+            await collectionRef.add(logEntry);
+            form.reset();
+            setCustomDate();
+        } catch (error) {
+            alert("Eroare la salvarea datelor: " + error.message);
+        }
+    });
+
+    // Ascultă modificările în timp real (real-time listener)
+    collectionRef.orderBy('km', 'asc').onSnapshot(snapshot => {
+        let logs = [];
+        snapshot.forEach(doc => {
+            logs.push({ id: doc.id, ...doc.data() });
+        });
+        renderTable(logs);
+    }, error => {
+        console.error("Eroare citire Firestore:", error);
+    });
+
+    // Șterge un element din baza de date
+    async function deleteLog(id) {
+        if (confirm("Sigur dorești să ștergi această înregistrare?")) {
+            await collectionRef.doc(id).delete();
+        }
     }
 
-    function saveLogs(logs) {
-        localStorage.setItem('zoe_logs', JSON.stringify(logs));
-    }
-
-    function deleteLog(index) {
-        let logs = getLogs();
-        logs.splice(index, 1);
-        saveLogs(logs);
-        renderTable();
-    }
-
-    function renderTable() {
-        let logs = getLogs();
+    // Afișare rânduri și calcul automat consum/cost
+    function renderTable(logs) {
         tableBody.innerHTML = '';
-
-        // Sortează înregistrările după kilometraj pentru calcule corecte
-        logs.sort((a, b) => Number(a.km) - Number(b.km));
 
         logs.forEach((log, index) => {
             const row = document.createElement('tr');
@@ -188,15 +222,13 @@
             let kwhPer100 = '-';
             let ronPer100 = '-';
 
-            // Calculăm consumul doar de la a doua înregistrare încolo
             if (index > 0) {
-                const prevKm = Number(logs[index - 1].km);
-                const currentKm = Number(log.km);
-                const dist = currentKm - prevKm;
+                const prevKm = logs[index - 1].km;
+                const dist = log.km - prevKm;
 
                 if (dist > 0) {
-                    kwhPer100 = ((Number(log.kwh) / dist) * 100).toFixed(2);
-                    ronPer100 = ((Number(log.cost) / dist) * 100).toFixed(2);
+                    kwhPer100 = ((log.kwh / dist) * 100).toFixed(2);
+                    ronPer100 = ((log.cost / dist) * 100).toFixed(2);
                 }
             }
 
@@ -208,31 +240,11 @@
                 <td>${log.cost} RON</td>
                 <td>${kwhPer100}</td>
                 <td>${ronPer100}</td>
-                <td><button class="btn-delete" onclick="deleteLog(${index})">Șterge</button></td>
+                <td><button class="btn-delete" onclick="deleteLog('${log.id}')">Șterge</button></td>
             `;
             tableBody.appendChild(row);
         });
     }
-
-    form.addEventListener('submit', function(event) {
-        event.preventDefault();
-
-        const logEntry = {
-            date: document.getElementById('date').value,
-            km: document.getElementById('km').value,
-            batteryStart: document.getElementById('batteryStart').value,
-            batteryEnd: document.getElementById('batteryEnd').value,
-            kwh: document.getElementById('kwh').value,
-            cost: document.getElementById('cost').value
-        };
-
-        const logs = getLogs();
-        logs.push(logEntry);
-        saveLogs(logs);
-        renderTable();
-        form.reset();
-        setCustomDate();
-    });
 
     function setCustomDate() {
         const now = new Date();
@@ -240,31 +252,7 @@
         document.getElementById('date').value = now.toISOString().slice(0,16);
     }
 
-    exportBtn.addEventListener('click', function() {
-        const logs = getLogs();
-        if (logs.length === 0) {
-            alert('Nu există date de exportat!');
-            return;
-        }
-
-        let csvContent = "data:text/csv;charset=utf-8,\uFEFF";
-        csvContent += "Data,Km,Baterie Start,Baterie Final,kWh,Cost RON\n";
-
-        logs.forEach(log => {
-            csvContent += `"${log.date}","${log.km}","${log.batteryStart}","${log.batteryEnd}","${log.kwh}","${log.cost}"\n`;
-        });
-
-        const encodedUri = encodeURI(csvContent);
-        const link = document.createElement("a");
-        link.setAttribute("href", encodedUri);
-        link.setAttribute("download", "jurnal_zoe.csv");
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-    });
-
     setCustomDate();
-    renderTable();
 </script>
 
 </body>
