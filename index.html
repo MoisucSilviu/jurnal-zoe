@@ -50,11 +50,10 @@
         }
         .stat-card p {
             margin: 0;
-            font-size: 18px;
+            font-size: 16px;
             font-weight: bold;
             color: #2c3e50;
         }
-        /* Bara de progres pentru abonament */
         .progress-container {
             width: 100%;
             background-color: #ddd;
@@ -167,11 +166,15 @@
             <p id="statAvgCost">- RON/100km</p>
         </div>
         <div class="stat-card full-width" style="border-left-color: #27ae60;">
-            <h3>Consum Ciclul Curent (120 kWh Inclusi)</h3>
+            <h3>Consum Ciclul Curent (120 kWh Incluși)</h3>
             <p id="statCurrentCycleKwh">0 / 120 kWh (0%)</p>
             <div class="progress-container">
                 <div id="cycleProgressBar" class="progress-bar"></div>
             </div>
+        </div>
+        <div class="stat-card full-width" style="border-left-color: #f39c12;">
+            <h3>Estimare până la data de 14</h3>
+            <p id="statEstimation">-</p>
         </div>
     </div>
 
@@ -424,8 +427,9 @@
         document.getElementById('statTotalCost').innerText = grandTotalCost.toFixed(2) + ' RON';
         document.getElementById('statTotalKwh').innerText = totalKwh.toFixed(2) + ' kWh';
 
-        // Actualizare Bară Progres Ciclul Curent
-        const currentCycleKey = getSubscriptionCycleKey(new Date().toISOString());
+        // Actualizare Bară Progres
+        const now = new Date();
+        const currentCycleKey = getSubscriptionCycleKey(now.toISOString());
         const currentCycleKwh = cycleKwhTracker[currentCycleKey] || 0;
         const percentage = Math.min(100, (currentCycleKwh / KWH_INCLUSE_LUNAR) * 100);
         
@@ -433,9 +437,42 @@
         const progressBar = document.getElementById('cycleProgressBar');
         progressBar.style.width = percentage + '%';
         if (percentage >= 100) {
-            progressBar.style.backgroundColor = '#e74c3c'; // Roșu la depășire
+            progressBar.style.backgroundColor = '#e74c3c';
         } else {
-            progressBar.style.backgroundColor = '#27ae60'; // Verde în limită
+            progressBar.style.backgroundColor = '#27ae60';
+        }
+
+        // CALCUL ESTIMARE PÂNĂ PE 14
+        const cycleStart = new Date(now);
+        if (now.getDate() < ZIUA_INCEPUT_ABONAMENT) {
+            cycleStart.setMonth(now.getMonth() - 1);
+        }
+        cycleStart.setDate(ZIUA_INCEPUT_ABONAMENT);
+        cycleStart.setHours(0, 0, 0, 0);
+
+        const cycleEnd = new Date(cycleStart);
+        cycleEnd.setMonth(cycleEnd.getMonth() + 1);
+
+        const msPerDay = 1000 * 60 * 60 * 24;
+        const daysElapsed = Math.max(1, Math.ceil((now - cycleStart) / msPerDay));
+        const daysRemaining = Math.max(0, Math.ceil((cycleEnd - now) / msPerDay));
+
+        const dailyRate = currentCycleKwh / daysElapsed;
+        const projectedTotalKwh = currentCycleKwh + (dailyRate * daysRemaining);
+        const estimationElem = document.getElementById('statEstimation');
+
+        if (currentCycleKwh === 0) {
+            estimationElem.innerText = "Nu ai încărcat încă în acest ciclu.";
+            estimationElem.style.color = "#7f8c8d";
+        } else if (projectedTotalKwh <= KWH_INCLUSE_LUNAR) {
+            const excessLeft = KWH_INCLUSE_LUNAR - projectedTotalKwh;
+            estimationElem.innerText = `🟢 Vei consuma ~${projectedTotalKwh.toFixed(1)} kWh (ritm: ${dailyRate.toFixed(2)} kWh/zi). Îți vor rămâne ~${excessLeft.toFixed(1)} kWh.`;
+            estimationElem.style.color = "#27ae60";
+        } else {
+            const overflowKwh = projectedTotalKwh - KWH_INCLUSE_LUNAR;
+            const extraCost = overflowKwh * TARIF_DEPASIRE_PER_KWH;
+            estimationElem.innerText = `🔴 Atenție: Vei depăși cota cu ~${overflowKwh.toFixed(1)} kWh (cost suplimentar est. ~${extraCost.toFixed(2)} RON).`;
+            estimationElem.style.color = "#e74c3c";
         }
 
         if (processedLogs.length > 1) {
