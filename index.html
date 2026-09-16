@@ -132,7 +132,7 @@
 <body>
 
 <div class="container">
-    <h1>Jurnal Încărcare Zoe (Abonament 200 RON / 120 kWh)</h1>
+    <h1>Jurnal Încărcare Zoe (Abonament 14-14)</h1>
 
     <div class="stats-grid">
         <div class="stat-card">
@@ -219,10 +219,11 @@
 </div>
 
 <script>
-    // Configurabil: Setări Abonament
-    const COST_ABONAMENT_LUNAR = 200; // RON
-    const KWH_INCLUSE_LUNAR = 120;     // kWh
-    const TARIF_DEPASIRE_PER_KWH = 2.0; // RON/kWh aplicat peste 120 kWh
+    // Configurări Abonament
+    const COST_ABONAMENT_LUNAR = 200;  // RON per ciclu
+    const KWH_INCLUSE_LUNAR = 120;      // kWh per ciclu
+    const TARIF_DEPASIRE_PER_KWH = 2.0; // RON/kWh extras
+    const ZIUA_INCEPUT_ABONAMENT = 14;  // Resetare în data de 14 a fiecărei luni
 
     const firebaseConfig = {
         apiKey: "AIzaSyDIlGRpQGWtfdwrfZ3bllzM168UrcSyrkE",
@@ -247,7 +248,22 @@
     let chartInstance = null;
     let currentLogs = [];
 
-    // Comutare afișare câmp cost custom
+    // Determină cheia unică a ciclului de abonament (ex: "2026-9" pentru 14 Sept - 13 Oct 2026)
+    function getSubscriptionCycleKey(dateString) {
+        const d = new Date(dateString);
+        let year = d.getFullYear();
+        let month = d.getMonth(); // 0-indexed (0 = Jan, 8 = Sep)
+
+        if (d.getDate() < ZIUA_INCEPUT_ABONAMENT) {
+            month -= 1;
+            if (month < 0) {
+                month = 11;
+                year -= 1;
+            }
+        }
+        return `${year}-${month + 1}`;
+    }
+
     useSubscriptionSelect.addEventListener('change', function() {
         if (this.value === 'false') {
             customCostContainer.style.display = 'block';
@@ -318,30 +334,27 @@
         let chartLabels = [];
         let chartData = [];
         
-        // Evidența lunară a kWh din abonament
-        let monthlyKwhTracker = {};
-        let activeMonths = new Set();
+        let cycleKwhTracker = {};
+        let activeCycles = new Set();
 
-        // Pasul 1: Calculare costuri individuale per ședință
         const processedLogs = logs.map(log => {
             totalKwh += Number(log.kwh);
-            const dateObj = new Date(log.date);
-            const monthKey = `${dateObj.getFullYear()}-${dateObj.getMonth() + 1}`;
-            activeMonths.add(monthKey);
+            const cycleKey = getSubscriptionCycleKey(log.date);
 
             let sessionCost = 0;
 
             if (log.isSubscription) {
-                const currentMonthKwh = monthlyKwhTracker[monthKey] || 0;
-                const newMonthKwh = currentMonthKwh + Number(log.kwh);
+                activeCycles.add(cycleKey);
+                const currentCycleKwh = cycleKwhTracker[cycleKey] || 0;
+                const newCycleKwh = currentCycleKwh + Number(log.kwh);
 
-                if (newMonthKwh > KWH_INCLUSE_LUNAR) {
-                    const extraKwh = Math.min(Number(log.kwh), newMonthKwh - KWH_INCLUSE_LUNAR);
+                if (newCycleKwh > KWH_INCLUSE_LUNAR) {
+                    const extraKwh = Math.min(Number(log.kwh), newCycleKwh - KWH_INCLUSE_LUNAR);
                     sessionCost = extraKwh * TARIF_DEPASIRE_PER_KWH;
                 } else {
                     sessionCost = 0;
                 }
-                monthlyKwhTracker[monthKey] = newMonthKwh;
+                cycleKwhTracker[cycleKey] = newCycleKwh;
             } else {
                 sessionCost = Number(log.manualCost) || 0;
             }
@@ -349,7 +362,6 @@
             return { ...log, computedCost: sessionCost };
         });
 
-        // Pasul 2: Randare tabel și calcule consum
         processedLogs.forEach((log, index) => {
             const row = document.createElement('tr');
             const dateObj = new Date(log.date);
@@ -386,9 +398,8 @@
             tableBody.appendChild(row);
         });
 
-        // Total cheltuieli = (Luni active * 200 RON) + Costuri depășiri/manuale
         let totalExtraCosts = processedLogs.reduce((acc, l) => acc + l.computedCost, 0);
-        let grandTotalCost = (activeMonths.size * COST_ABONAMENT_LUNAR) + totalExtraCosts;
+        let grandTotalCost = (activeCycles.size * COST_ABONAMENT_LUNAR) + totalExtraCosts;
 
         document.getElementById('statTotalCost').innerText = grandTotalCost.toFixed(2) + ' RON';
         document.getElementById('statTotalKwh').innerText = totalKwh.toFixed(2) + ' kWh';
