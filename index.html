@@ -5,10 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Jurnal Încărcare Renault Zoe Pro</title>
     
-    <!-- Librării Firebase Web -->
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
-    <!-- Librărie Grafice (Chart.js) -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
     <style>
@@ -31,7 +29,6 @@
             text-align: center;
             color: #2c3e50;
         }
-        /* Dashboard cu 4 carduri */
         .stats-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
@@ -69,7 +66,7 @@
             font-weight: bold;
             font-size: 14px;
         }
-        input {
+        input, select {
             width: 100%;
             padding: 10px;
             border: 1px solid #ccc;
@@ -135,9 +132,8 @@
 <body>
 
 <div class="container">
-    <h1>Jurnal Încărcare Zoe (Pro)</h1>
+    <h1>Jurnal Încărcare Zoe (Abonament 200 RON / 120 kWh)</h1>
 
-    <!-- Tablou de bord cu statistici -->
     <div class="stats-grid">
         <div class="stat-card">
             <h3>Total Cheltuit</h3>
@@ -157,7 +153,6 @@
         </div>
     </div>
 
-    <!-- Formular de introducere -->
     <form id="chargeForm">
         <div>
             <label for="date">Data și Ora:</label>
@@ -180,21 +175,26 @@
             <input type="number" id="kwh" step="0.01" placeholder="ex: 15.5" required>
         </div>
         <div>
-            <label for="cost">Cost Total (RON):</label>
-            <input type="number" id="cost" step="0.01" placeholder="ex: 45.5" required>
+            <label for="useSubscription">Tip Încărcare:</label>
+            <select id="useSubscription">
+                <option value="true">Din Abonament (200 RON / 120 kWh)</option>
+                <option value="false">Altfel / Cost Direct Custom</option>
+            </select>
+        </div>
+        <div id="customCostContainer" class="full-width" style="display: none;">
+            <label for="cost">Cost Direct (RON):</label>
+            <input type="number" id="cost" step="0.01" placeholder="0.00" value="0">
         </div>
         <div class="full-width">
             <button type="submit" class="btn btn-primary">Adaugă Înregistrare</button>
         </div>
     </form>
 
-    <!-- Grafic evoluție consum -->
     <div class="chart-container">
         <h2>Evoluție Consum (kWh/100km)</h2>
         <canvas id="consumptionChart"></canvas>
     </div>
 
-    <!-- Tabel Istoric -->
     <h2>Istoric Încărcări</h2>
     <div class="table-container">
         <table id="logsTable">
@@ -204,7 +204,7 @@
                     <th>Km</th>
                     <th>Baterie</th>
                     <th>kWh</th>
-                    <th>Cost</th>
+                    <th>Cost Ședință</th>
                     <th>kWh/100km</th>
                     <th>RON/100km</th>
                     <th>Acțiune</th>
@@ -219,7 +219,11 @@
 </div>
 
 <script>
-    // Configurația proiectului Firebase
+    // Configurabil: Setări Abonament
+    const COST_ABONAMENT_LUNAR = 200; // RON
+    const KWH_INCLUSE_LUNAR = 120;     // kWh
+    const TARIF_DEPASIRE_PER_KWH = 2.0; // RON/kWh aplicat peste 120 kWh
+
     const firebaseConfig = {
         apiKey: "AIzaSyDIlGRpQGWtfdwrfZ3bllzM168UrcSyrkE",
         authDomain: "zoe-charge-log.firebaseapp.com",
@@ -237,13 +241,30 @@
     const form = document.getElementById('chargeForm');
     const tableBody = document.querySelector('#logsTable tbody');
     const exportBtn = document.getElementById('exportBtn');
+    const useSubscriptionSelect = document.getElementById('useSubscription');
+    const customCostContainer = document.getElementById('customCostContainer');
     
     let chartInstance = null;
     let currentLogs = [];
 
-    // Adăugare date în Firebase
+    // Comutare afișare câmp cost custom
+    useSubscriptionSelect.addEventListener('change', function() {
+        if (this.value === 'false') {
+            customCostContainer.style.display = 'block';
+        } else {
+            customCostContainer.style.display = 'none';
+        }
+    });
+
     form.addEventListener('submit', async function(event) {
         event.preventDefault();
+
+        const isSub = useSubscriptionSelect.value === 'true';
+        let calculatedCost = 0;
+
+        if (!isSub) {
+            calculatedCost = Number(document.getElementById('cost').value) || 0;
+        }
 
         const logEntry = {
             date: document.getElementById('date').value,
@@ -251,28 +272,28 @@
             batteryStart: Number(document.getElementById('batteryStart').value),
             batteryEnd: Number(document.getElementById('batteryEnd').value),
             kwh: Number(document.getElementById('kwh').value),
-            cost: Number(document.getElementById('cost').value),
+            isSubscription: isSub,
+            manualCost: calculatedCost,
             createdAt: firebase.firestore.FieldValue.serverTimestamp()
         };
 
         try {
             await collectionRef.add(logEntry);
             form.reset();
+            customCostContainer.style.display = 'none';
             setCustomDate();
         } catch (error) {
             alert("❌ Eroare la salvare: " + error.message);
         }
     });
 
-    // Ascultare și actualizare în timp real
     collectionRef.onSnapshot(snapshot => {
         let logs = [];
         snapshot.forEach(doc => {
             logs.push({ id: doc.id, ...doc.data() });
         });
         
-        // Sortare crescătoare după kilometraj
-        logs.sort((a, b) => Number(a.km) - Number(b.km));
+        logs.sort((a, b) => new Date(a.date) - new Date(b.date));
         currentLogs = logs;
         
         renderApp(logs);
@@ -280,7 +301,6 @@
         alert("❌ Eroare citire date: " + error.message);
     });
 
-    // Ștergere înregistrare
     async function deleteLog(id) {
         if (confirm("Sigur dorești să ștergi această înregistrare?")) {
             try {
@@ -291,19 +311,46 @@
         }
     }
 
-    // Funcția principală de randare (Tabel, Statistici, Grafic)
     function renderApp(logs) {
         tableBody.innerHTML = '';
 
-        let totalCost = 0;
         let totalKwh = 0;
         let chartLabels = [];
         let chartData = [];
+        
+        // Evidența lunară a kWh din abonament
+        let monthlyKwhTracker = {};
+        let activeMonths = new Set();
 
-        logs.forEach((log, index) => {
-            totalCost += Number(log.cost);
+        // Pasul 1: Calculare costuri individuale per ședință
+        const processedLogs = logs.map(log => {
             totalKwh += Number(log.kwh);
+            const dateObj = new Date(log.date);
+            const monthKey = `${dateObj.getFullYear()}-${dateObj.getMonth() + 1}`;
+            activeMonths.add(monthKey);
 
+            let sessionCost = 0;
+
+            if (log.isSubscription) {
+                const currentMonthKwh = monthlyKwhTracker[monthKey] || 0;
+                const newMonthKwh = currentMonthKwh + Number(log.kwh);
+
+                if (newMonthKwh > KWH_INCLUSE_LUNAR) {
+                    const extraKwh = Math.min(Number(log.kwh), newMonthKwh - KWH_INCLUSE_LUNAR);
+                    sessionCost = extraKwh * TARIF_DEPASIRE_PER_KWH;
+                } else {
+                    sessionCost = 0;
+                }
+                monthlyKwhTracker[monthKey] = newMonthKwh;
+            } else {
+                sessionCost = Number(log.manualCost) || 0;
+            }
+
+            return { ...log, computedCost: sessionCost };
+        });
+
+        // Pasul 2: Randare tabel și calcule consum
+        processedLogs.forEach((log, index) => {
             const row = document.createElement('tr');
             const dateObj = new Date(log.date);
             const formattedDate = dateObj.toLocaleDateString('ro-RO') + ' ' + dateObj.toLocaleTimeString('ro-RO', {hour: '2-digit', minute:'2-digit'});
@@ -312,12 +359,12 @@
             let ronPer100 = '-';
 
             if (index > 0) {
-                const prevKm = logs[index - 1].km;
+                const prevKm = processedLogs[index - 1].km;
                 const dist = log.km - prevKm;
 
                 if (dist > 0) {
                     const calcKwh = ((log.kwh / dist) * 100);
-                    const calcRon = ((log.cost / dist) * 100);
+                    const calcRon = ((log.computedCost / dist) * 100);
                     kwhPer100 = calcKwh.toFixed(2);
                     ronPer100 = calcRon.toFixed(2);
 
@@ -331,7 +378,7 @@
                 <td>${log.km}</td>
                 <td>${log.batteryStart}% → ${log.batteryEnd}%</td>
                 <td>${log.kwh}</td>
-                <td>${log.cost} RON</td>
+                <td>${log.computedCost.toFixed(2)} RON</td>
                 <td>${kwhPer100}</td>
                 <td>${ronPer100}</td>
                 <td><button class="btn-delete" onclick="deleteLog('${log.id}')">Șterge</button></td>
@@ -339,21 +386,22 @@
             tableBody.appendChild(row);
         });
 
-        // Actualizare Panou Statistici
-        document.getElementById('statTotalCost').innerText = totalCost.toFixed(2) + ' RON';
+        // Total cheltuieli = (Luni active * 200 RON) + Costuri depășiri/manuale
+        let totalExtraCosts = processedLogs.reduce((acc, l) => acc + l.computedCost, 0);
+        let grandTotalCost = (activeMonths.size * COST_ABONAMENT_LUNAR) + totalExtraCosts;
+
+        document.getElementById('statTotalCost').innerText = grandTotalCost.toFixed(2) + ' RON';
         document.getElementById('statTotalKwh').innerText = totalKwh.toFixed(2) + ' kWh';
 
-        if (logs.length > 1) {
-            const totalDist = logs[logs.length - 1].km - logs[0].km;
+        if (processedLogs.length > 1) {
+            const totalDist = processedLogs[processedLogs.length - 1].km - processedLogs[0].km;
             if (totalDist > 0) {
                 let sumKwhAfterFirst = 0;
-                let sumCostAfterFirst = 0;
-                for(let i = 1; i < logs.length; i++) {
-                    sumKwhAfterFirst += Number(logs[i].kwh);
-                    sumCostAfterFirst += Number(logs[i].cost);
+                for(let i = 1; i < processedLogs.length; i++) {
+                    sumKwhAfterFirst += Number(processedLogs[i].kwh);
                 }
                 const avgKwh = (sumKwhAfterFirst / totalDist) * 100;
-                const avgCost = (sumCostAfterFirst / totalDist) * 100;
+                const avgCost = (grandTotalCost / totalDist) * 100;
 
                 document.getElementById('statAvgKwh').innerText = avgKwh.toFixed(2) + ' kWh/100km';
                 document.getElementById('statAvgCost').innerText = avgCost.toFixed(2) + ' RON/100km';
@@ -363,16 +411,12 @@
             document.getElementById('statAvgCost').innerText = '- RON/100km';
         }
 
-        // Desenare/Actualizare Grafic Chart.js
         renderChart(chartLabels, chartData);
     }
 
     function renderChart(labels, data) {
         const ctx = document.getElementById('consumptionChart').getContext('2d');
-        
-        if (chartInstance) {
-            chartInstance.destroy();
-        }
+        if (chartInstance) chartInstance.destroy();
 
         chartInstance = new Chart(ctx, {
             type: 'line',
@@ -391,27 +435,20 @@
             options: {
                 responsive: true,
                 scales: {
-                    y: {
-                        beginAtZero: false,
-                        title: { display: true, text: 'kWh / 100 km' }
-                    }
+                    y: { beginAtZero: false, title: { display: true, text: 'kWh / 100 km' } }
                 }
             }
         });
     }
 
-    // Export CSV
     exportBtn.addEventListener('click', function() {
-        if (currentLogs.length === 0) {
-            alert('Nu există date de exportat!');
-            return;
-        }
+        if (currentLogs.length === 0) return alert('Nu există date de exportat!');
 
         let csvContent = "data:text/csv;charset=utf-8,\uFEFF";
-        csvContent += "Data,Km,Baterie Start,Baterie Final,kWh,Cost RON\n";
+        csvContent += "Data,Km,Baterie Start,Baterie Final,kWh,Tip,Cost Calculat RON\n";
 
         currentLogs.forEach(log => {
-            csvContent += `"${log.date}","${log.km}","${log.batteryStart}","${log.batteryEnd}","${log.kwh}","${log.cost}"\n`;
+            csvContent += `"${log.date}","${log.km}","${log.batteryStart}","${log.batteryEnd}","${log.kwh}","${log.isSubscription ? 'Abonament' : 'Direct'}","${log.computedCost || 0}"\n`;
         });
 
         const encodedUri = encodeURI(csvContent);
