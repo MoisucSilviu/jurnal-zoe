@@ -173,7 +173,7 @@
             </div>
         </div>
         <div id="estimationCard" class="stat-card full-width" style="border-left-color: #3498db;">
-            <h3>Estimare până la data de 14</h3>
+            <h3>Estimare Bazată pe Ritmul de Rulare (km)</h3>
             <p id="statEstimation">-</p>
         </div>
     </div>
@@ -427,7 +427,7 @@
         progressBar.style.width = percentage + '%';
         progressBar.style.backgroundColor = (percentage >= 100) ? '#e74c3c' : '#27ae60';
 
-        // REFINED ESTIMATION ALGORITHM
+        // CALCUL DE ESTIMARE PE BAZĂ DE KILOMETRI
         const cycleStart = new Date(now);
         if (now.getDate() < ZIUA_INCEPUT_ABONAMENT) {
             cycleStart.setMonth(now.getMonth() - 1);
@@ -442,45 +442,59 @@
         const daysElapsed = Math.max(0.1, (now - cycleStart) / msPerDay);
         const daysRemaining = Math.max(0, (cycleEnd - now) / msPerDay);
 
+        // Calculează consumul mediu real al mașinii (sau 14.09 ca fallback)
+        let avgConsumption = 14.09;
+        if (processedLogs.length > 1) {
+            const totalDistAll = processedLogs[processedLogs.length - 1].km - processedLogs[0].km;
+            if (totalDistAll > 0) {
+                let sumKwhAfterFirst = 0;
+                for (let i = 1; i < processedLogs.length; i++) {
+                    sumKwhAfterFirst += Number(processedLogs[i].kwh);
+                }
+                avgConsumption = (sumKwhAfterFirst / totalDistAll) * 100;
+            }
+        }
+
+        // Calculează km parcurși în ciclul curent
+        const currentCycleLogs = processedLogs.filter(l => l.cycleKey === currentCycleKey);
+        let kmDrivenInCycle = 0;
+        if (currentCycleLogs.length > 1) {
+            kmDrivenInCycle = currentCycleLogs[currentCycleLogs.length - 1].km - currentCycleLogs[0].km;
+        }
+
+        // Determinare ritm zilnic (km/zi): folosește ritmul real sau implicit 35 km/zi (70km la 2 zile)
+        let dailyKmRate = 35; 
+        if (daysElapsed >= 1 && kmDrivenInCycle > 0) {
+            dailyKmRate = kmDrivenInCycle / daysElapsed;
+        }
+
+        // Proiecție energie rămasă
+        const projectedRemainingKm = dailyKmRate * daysRemaining;
+        const projectedAdditionalKwh = (projectedRemainingKm * avgConsumption) / 100;
+        const projectedTotalKwh = currentCycleKwh + projectedAdditionalKwh;
+
         const estimationCard = document.getElementById('estimationCard');
         const estimationElem = document.getElementById('statEstimation');
-        const remainingQuota = Math.max(0, KWH_INCLUSE_LUNAR - currentCycleKwh);
 
         if (currentCycleKwh === 0) {
-            estimationElem.innerText = "Nu ai încărcat încă în acest ciclu.";
+            estimationElem.innerText = "Nu există încărcări înregistrate în acest ciclu.";
             estimationCard.style.borderLeftColor = "#7f8c8d";
-        } else if (daysElapsed < 3) {
-            // Grace Period: Show budget rate rather than early extrapolation panic
-            const recDaily = daysRemaining > 0 ? (remainingQuota / daysRemaining) : 0;
-            estimationElem.innerText = `ℹ️ Ciclul abia a început (${daysElapsed.toFixed(1)} zile). Mai ai ${remainingQuota.toFixed(1)} kWh (~${recDaily.toFixed(1)} kWh/zi recomandat pentru restul de ${Math.ceil(daysRemaining)} zile).`;
-            estimationCard.style.borderLeftColor = "#3498db";
+        } else if (projectedTotalKwh <= KWH_INCLUSE_LUNAR) {
+            const excessKwh = KWH_INCLUSE_LUNAR - projectedTotalKwh;
+            estimationElem.innerText = `🟢 La un ritm de ~${dailyKmRate.toFixed(1)} km/zi, vei parcurge încă ~${projectedRemainingKm.toFixed(0)} km până pe 14. Consum est.: ~${projectedTotalKwh.toFixed(1)} kWh (îți rămân ~${excessKwh.toFixed(1)} kWh).`;
+            estimationCard.style.borderLeftColor = "#27ae60";
         } else {
-            const dailyRate = currentCycleKwh / daysElapsed;
-            const projectedTotalKwh = currentCycleKwh + (dailyRate * daysRemaining);
-
-            if (projectedTotalKwh <= KWH_INCLUSE_LUNAR) {
-                const excessLeft = KWH_INCLUSE_LUNAR - projectedTotalKwh;
-                estimationElem.innerText = `🟢 Vei consuma ~${projectedTotalKwh.toFixed(1)} kWh (ritm: ${dailyRate.toFixed(2)} kWh/zi). Îți vor rămâne ~${excessLeft.toFixed(1)} kWh.`;
-                estimationCard.style.borderLeftColor = "#27ae60";
-            } else {
-                const overflowKwh = projectedTotalKwh - KWH_INCLUSE_LUNAR;
-                const extraCost = overflowKwh * TARIF_DEPASIRE_PER_KWH;
-                estimationElem.innerText = `🔴 Atenție: Vei depăși cota cu ~${overflowKwh.toFixed(1)} kWh (cost suplimentar est. ~${extraCost.toFixed(2)} RON).`;
-                estimationCard.style.borderLeftColor = "#e74c3c";
-            }
+            const overflowKwh = projectedTotalKwh - KWH_INCLUSE_LUNAR;
+            const extraCost = overflowKwh * TARIF_DEPASIRE_PER_KWH;
+            estimationElem.innerText = `🔴 La un ritm de ~${dailyKmRate.toFixed(1)} km/zi, vei parcurge încă ~${projectedRemainingKm.toFixed(0)} km. Vei depăși cota cu ~${overflowKwh.toFixed(1)} kWh (cost suplimentar est.: ~${extraCost.toFixed(2)} RON).`;
+            estimationCard.style.borderLeftColor = "#e74c3c";
         }
 
         if (processedLogs.length > 1) {
             const totalDist = processedLogs[processedLogs.length - 1].km - processedLogs[0].km;
             if (totalDist > 0) {
-                let sumKwhAfterFirst = 0;
-                for(let i = 1; i < processedLogs.length; i++) {
-                    sumKwhAfterFirst += Number(processedLogs[i].kwh);
-                }
-                const avgKwh = (sumKwhAfterFirst / totalDist) * 100;
                 const avgCost = (grandTotalCost / totalDist) * 100;
-
-                document.getElementById('statAvgKwh').innerText = avgKwh.toFixed(2) + ' kWh/100km';
+                document.getElementById('statAvgKwh').innerText = avgConsumption.toFixed(2) + ' kWh/100km';
                 document.getElementById('statAvgCost').innerText = avgCost.toFixed(2) + ' RON/100km';
             }
         } else {
