@@ -5,8 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Jurnal Încărcare Renault Zoe Pro</title>
     
+    <!-- Librării Firebase Web -->
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+    <!-- Librărie Grafice -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
     <style>
@@ -148,6 +150,7 @@
 <div class="container">
     <h1>Jurnal Încărcare Zoe</h1>
 
+    <!-- Dashboard Statistici -->
     <div class="stats-grid">
         <div class="stat-card">
             <h3>Total Cheltuit</h3>
@@ -166,13 +169,14 @@
             <p id="statAvgCost">- RON/100km</p>
         </div>
         
-        <!-- Noul Modul de Economie -->
+        <!-- Modul Economie / Amortizare -->
         <div class="stat-card full-width" style="border-left-color: #8e44ad; background-color: #f9f0ff;">
             <h3>💰 Economie față de mașinile termice (Amortizare)</h3>
-            <p id="statEconomyQashqai" style="color: #27ae60; font-size: 18px;">Calculăm...</p>
-            <p id="statEconomyFord" style="color: #27ae60; font-size: 15px; margin-top: 5px;">Calculăm...</p>
+            <p id="statEconomyQashqai" style="font-size: 16px;">Calculăm...</p>
+            <p id="statEconomyFord" style="font-size: 15px; margin-top: 5px;">Calculăm...</p>
         </div>
 
+        <!-- Progres Abonament -->
         <div class="stat-card full-width" style="border-left-color: #27ae60;">
             <h3>Consum Ciclul Curent (120 kWh Incluși)</h3>
             <p id="statCurrentCycleKwh">0 / 120 kWh (0%)</p>
@@ -180,12 +184,15 @@
                 <div id="cycleProgressBar" class="progress-bar"></div>
             </div>
         </div>
+
+        <!-- Estimare Distanță -->
         <div id="estimationCard" class="stat-card full-width" style="border-left-color: #3498db;">
             <h3>Estimare Bazată pe Ritmul de Rulare (km)</h3>
             <p id="statEstimation">-</p>
         </div>
     </div>
 
+    <!-- Formular Inregistrare -->
     <form id="chargeForm">
         <div>
             <label for="date">Data și Ora:</label>
@@ -223,11 +230,13 @@
         </div>
     </form>
 
+    <!-- Grafic Evolutie -->
     <div class="chart-container">
         <h2>Evoluție Consum (kWh/100km)</h2>
         <canvas id="consumptionChart"></canvas>
     </div>
 
+    <!-- Tabel Istoric -->
     <h2>Istoric Încărcări</h2>
     <div class="table-container">
         <table id="logsTable">
@@ -252,16 +261,15 @@
 </div>
 
 <script>
-    // ---- SETĂRI PENTRU ECONOMIE ȘI ABONAMENT ---- //
+    // Configurație Parametri
     const COST_ABONAMENT_LUNAR = 200;
     const KWH_INCLUSE_LUNAR = 120;
     const TARIF_DEPASIRE_PER_KWH = 2.0;
     const ZIUA_INCEPUT_ABONAMENT = 14;
     
-    // Variabile pentru modulul de amortizare
-    const PRET_LITRU_CARBURANT = 7.2; // RON / Litru. Poți schimba valoarea aici!
-    const CONSUM_QASHQAI = 7.4; // L / 100km
-    const CONSUM_FORD = 10.5; // L / 100km
+    const PRET_LITRU_CARBURANT = 7.2; // RON/L
+    const CONSUM_QASHQAI = 7.4;        // L/100km
+    const CONSUM_FORD = 10.5;          // L/100km
 
     const firebaseConfig = {
         apiKey: "AIzaSyDIlGRpQGWtfdwrfZ3bllzM168UrcSyrkE",
@@ -430,7 +438,7 @@
         document.getElementById('statTotalCost').innerText = grandTotalCost.toFixed(2) + ' RON';
         document.getElementById('statTotalKwh').innerText = totalKwh.toFixed(2) + ' kWh';
 
-        // Update Progress Bar
+        // Bară Progres Abonament
         const now = new Date();
         const currentCycleKey = getSubscriptionCycleKey(now.toISOString());
         const currentCycleKwh = cycleKwhTracker[currentCycleKey] || 0;
@@ -441,7 +449,7 @@
         progressBar.style.width = percentage + '%';
         progressBar.style.backgroundColor = (percentage >= 100) ? '#e74c3c' : '#27ae60';
 
-        // CALCUL DE ESTIMARE PE BAZĂ DE KILOMETRI
+        // Calcul Timp Ciclul Curent
         const cycleStart = new Date(now);
         if (now.getDate() < ZIUA_INCEPUT_ABONAMENT) {
             cycleStart.setMonth(now.getMonth() - 1);
@@ -457,7 +465,7 @@
         const daysRemaining = Math.max(0, (cycleEnd - now) / msPerDay);
 
         let avgConsumption = 14.09;
-        let totalDistAll = 0; // Vom folosi asta și pentru modulul de economie
+        let totalDistAll = 0;
 
         if (processedLogs.length > 1) {
             totalDistAll = processedLogs[processedLogs.length - 1].km - processedLogs[0].km;
@@ -502,26 +510,41 @@
             estimationCard.style.borderLeftColor = "#e74c3c";
         }
 
-        // CALCUL COST MEDIU PROIECTAT ȘI MODUL DE ECONOMIE
+        // Cost Mediu Proiectat & Amortizare
         if (totalDistAll > 0) {
-            // Reparația pentru Cost Mediu (de la pasul anterior)
             const totalProjectedKmInCycle = (kmDrivenInCycle > 0 ? kmDrivenInCycle : totalDistAll) + projectedRemainingKm;
             const projectedAvgCost = (grandTotalCost / totalProjectedKmInCycle) * 100;
             
             document.getElementById('statAvgKwh').innerText = avgConsumption.toFixed(2) + ' kWh/100km';
             document.getElementById('statAvgCost').innerText = '~' + projectedAvgCost.toFixed(2) + ' RON/100km';
 
-            // NOUL MODUL DE ECONOMIE
-            // Cât ar fi costat combustibilul pentru aceeași distanță?
+            // Amortizare / Economie
             const costQashqai = (totalDistAll / 100) * CONSUM_QASHQAI * PRET_LITRU_CARBURANT;
             const costFord = (totalDistAll / 100) * CONSUM_FORD * PRET_LITRU_CARBURANT;
 
-            // Banii salvați = Cost Termic - Costul Real Electric Plătit Până Acum
             const economieQashqai = costQashqai - grandTotalCost;
             const economieFord = costFord - grandTotalCost;
 
-            document.getElementById('statEconomyQashqai').innerText = `+${economieQashqai.toFixed(0)} RON în buzunar față de Nissan Qashqai (7.4%)`;
-            document.getElementById('statEconomyFord').innerText = `+${economieFord.toFixed(0)} RON economisiți față de Ford (10.5%)`;
+            const elemQashqai = document.getElementById('statEconomyQashqai');
+            const elemFord = document.getElementById('statEconomyFord');
+
+            if (economieQashqai >= 0) {
+                elemQashqai.innerText = `🟢 +${economieQashqai.toFixed(0)} RON economisiți în buzunar față de Nissan Qashqai (7.4l/100km)`;
+                elemQashqai.style.color = "#27ae60";
+            } else {
+                const kmRamasiQ = Math.ceil((Math.abs(economieQashqai) / (CONSUM_QASHQAI * PRET_LITRU_CARBURANT)) * 100);
+                elemQashqai.innerText = `⏳ Amortizare abonament Qashqai: ${economieQashqai.toFixed(0)} RON (faci profit după încă ~${kmRamasiQ} km)`;
+                elemQashqai.style.color = "#d35400";
+            }
+
+            if (economieFord >= 0) {
+                elemFord.innerText = `🟢 +${economieFord.toFixed(0)} RON economisiți în buzunar față de Ford (10.5l/100km)`;
+                elemFord.style.color = "#27ae60";
+            } else {
+                const kmRamasiF = Math.ceil((Math.abs(economieFord) / (CONSUM_FORD * PRET_LITRU_CARBURANT)) * 100);
+                elemFord.innerText = `⏳ Amortizare abonament Ford: ${economieFord.toFixed(0)} RON (faci profit după încă ~${kmRamasiF} km)`;
+                elemFord.style.color = "#d35400";
+            }
 
         } else {
             document.getElementById('statAvgKwh').innerText = '- kWh/100km';
