@@ -162,9 +162,17 @@
             <p id="statAvgKwh">- kWh/100km</p>
         </div>
         <div class="stat-card">
-            <h3>Cost Mediu</h3>
+            <h3>Cost Mediu Proiectat</h3>
             <p id="statAvgCost">- RON/100km</p>
         </div>
+        
+        <!-- Noul Modul de Economie -->
+        <div class="stat-card full-width" style="border-left-color: #8e44ad; background-color: #f9f0ff;">
+            <h3>💰 Economie față de mașinile termice (Amortizare)</h3>
+            <p id="statEconomyQashqai" style="color: #27ae60; font-size: 18px;">Calculăm...</p>
+            <p id="statEconomyFord" style="color: #27ae60; font-size: 15px; margin-top: 5px;">Calculăm...</p>
+        </div>
+
         <div class="stat-card full-width" style="border-left-color: #27ae60;">
             <h3>Consum Ciclul Curent (120 kWh Incluși)</h3>
             <p id="statCurrentCycleKwh">0 / 120 kWh (0%)</p>
@@ -244,10 +252,16 @@
 </div>
 
 <script>
+    // ---- SETĂRI PENTRU ECONOMIE ȘI ABONAMENT ---- //
     const COST_ABONAMENT_LUNAR = 200;
     const KWH_INCLUSE_LUNAR = 120;
     const TARIF_DEPASIRE_PER_KWH = 2.0;
     const ZIUA_INCEPUT_ABONAMENT = 14;
+    
+    // Variabile pentru modulul de amortizare
+    const PRET_LITRU_CARBURANT = 7.2; // RON / Litru. Poți schimba valoarea aici!
+    const CONSUM_QASHQAI = 7.4; // L / 100km
+    const CONSUM_FORD = 10.5; // L / 100km
 
     const firebaseConfig = {
         apiKey: "AIzaSyDIlGRpQGWtfdwrfZ3bllzM168UrcSyrkE",
@@ -442,10 +456,11 @@
         const daysElapsed = Math.max(0.1, (now - cycleStart) / msPerDay);
         const daysRemaining = Math.max(0, (cycleEnd - now) / msPerDay);
 
-        // Calculează consumul mediu real al mașinii (sau 14.09 ca fallback)
         let avgConsumption = 14.09;
+        let totalDistAll = 0; // Vom folosi asta și pentru modulul de economie
+
         if (processedLogs.length > 1) {
-            const totalDistAll = processedLogs[processedLogs.length - 1].km - processedLogs[0].km;
+            totalDistAll = processedLogs[processedLogs.length - 1].km - processedLogs[0].km;
             if (totalDistAll > 0) {
                 let sumKwhAfterFirst = 0;
                 for (let i = 1; i < processedLogs.length; i++) {
@@ -455,20 +470,17 @@
             }
         }
 
-        // Calculează km parcurși în ciclul curent
         const currentCycleLogs = processedLogs.filter(l => l.cycleKey === currentCycleKey);
         let kmDrivenInCycle = 0;
         if (currentCycleLogs.length > 1) {
             kmDrivenInCycle = currentCycleLogs[currentCycleLogs.length - 1].km - currentCycleLogs[0].km;
         }
 
-        // Determinare ritm zilnic (km/zi): folosește ritmul real sau implicit 35 km/zi (70km la 2 zile)
         let dailyKmRate = 35; 
         if (daysElapsed >= 1 && kmDrivenInCycle > 0) {
             dailyKmRate = kmDrivenInCycle / daysElapsed;
         }
 
-        // Proiecție energie rămasă
         const projectedRemainingKm = dailyKmRate * daysRemaining;
         const projectedAdditionalKwh = (projectedRemainingKm * avgConsumption) / 100;
         const projectedTotalKwh = currentCycleKwh + projectedAdditionalKwh;
@@ -486,20 +498,36 @@
         } else {
             const overflowKwh = projectedTotalKwh - KWH_INCLUSE_LUNAR;
             const extraCost = overflowKwh * TARIF_DEPASIRE_PER_KWH;
-            estimationElem.innerText = `🔴 La un ritm de ~${dailyKmRate.toFixed(1)} km/zi, vei parcurge încă ~${projectedRemainingKm.toFixed(0)} km. Vei depăși cota cu ~${overflowKwh.toFixed(1)} kWh (cost suplimentar est.: ~${extraCost.toFixed(2)} RON).`;
+            estimationElem.innerText = `🔴 La un ritm de ~${dailyKmRate.toFixed(1)} km/zi, vei parcurge încă ~${projectedRemainingKm.toFixed(0)} km. Vei depăși cota cu ~${overflowKwh.toFixed(1)} kWh (cost supl. est.: ~${extraCost.toFixed(2)} RON).`;
             estimationCard.style.borderLeftColor = "#e74c3c";
         }
 
-        if (processedLogs.length > 1) {
-            const totalDist = processedLogs[processedLogs.length - 1].km - processedLogs[0].km;
-            if (totalDist > 0) {
-                const avgCost = (grandTotalCost / totalDist) * 100;
-                document.getElementById('statAvgKwh').innerText = avgConsumption.toFixed(2) + ' kWh/100km';
-                document.getElementById('statAvgCost').innerText = avgCost.toFixed(2) + ' RON/100km';
-            }
+        // CALCUL COST MEDIU PROIECTAT ȘI MODUL DE ECONOMIE
+        if (totalDistAll > 0) {
+            // Reparația pentru Cost Mediu (de la pasul anterior)
+            const totalProjectedKmInCycle = (kmDrivenInCycle > 0 ? kmDrivenInCycle : totalDistAll) + projectedRemainingKm;
+            const projectedAvgCost = (grandTotalCost / totalProjectedKmInCycle) * 100;
+            
+            document.getElementById('statAvgKwh').innerText = avgConsumption.toFixed(2) + ' kWh/100km';
+            document.getElementById('statAvgCost').innerText = '~' + projectedAvgCost.toFixed(2) + ' RON/100km';
+
+            // NOUL MODUL DE ECONOMIE
+            // Cât ar fi costat combustibilul pentru aceeași distanță?
+            const costQashqai = (totalDistAll / 100) * CONSUM_QASHQAI * PRET_LITRU_CARBURANT;
+            const costFord = (totalDistAll / 100) * CONSUM_FORD * PRET_LITRU_CARBURANT;
+
+            // Banii salvați = Cost Termic - Costul Real Electric Plătit Până Acum
+            const economieQashqai = costQashqai - grandTotalCost;
+            const economieFord = costFord - grandTotalCost;
+
+            document.getElementById('statEconomyQashqai').innerText = `+${economieQashqai.toFixed(0)} RON în buzunar față de Nissan Qashqai (7.4%)`;
+            document.getElementById('statEconomyFord').innerText = `+${economieFord.toFixed(0)} RON economisiți față de Ford (10.5%)`;
+
         } else {
             document.getElementById('statAvgKwh').innerText = '- kWh/100km';
             document.getElementById('statAvgCost').innerText = '- RON/100km';
+            document.getElementById('statEconomyQashqai').innerText = "Vom calcula după prima cursă.";
+            document.getElementById('statEconomyFord').innerText = "";
         }
 
         renderChart(chartLabels, chartData);
