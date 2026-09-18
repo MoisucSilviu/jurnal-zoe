@@ -3,8 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Jurnal Încărcare Zoe</title>
+    <title>Jurnal Încărcare Zoe Pro</title>
 
+    <!-- PWA Support via Data URIs -->
+    <link rel="manifest" href='data:application/json,{"name":"Jurnal Zoe Pro","short_name":"ZoePro","start_url":".","display":"standalone","background_color":"#0f1117","theme_color":"#00b894","icons":[{"src":"https://cdn-icons-png.flaticon.com/512/3202/3202052.png","sizes":"512x512","type":"image/png"}]}'>
+    <meta name="theme-color" content="#00b894">
+
+    <!-- Firebase & Chart.js -->
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -12,7 +17,6 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 
     <style>
-        /* ── Token System ── */
         :root {
             --bg:          #f0f4f8;
             --surface:     #ffffff;
@@ -80,7 +84,7 @@
             padding: 2px 8px;
             border-radius: 20px;
         }
-        .header-actions { display: flex; gap: 10px; align-items: center; }
+        .header-actions { display: flex; gap: 8px; align-items: center; }
 
         .container {
             max-width: 980px;
@@ -104,11 +108,15 @@
         .btn:active { transform: scale(0.97); }
         .btn-primary  { background: var(--accent); color: #fff; width: 100%; justify-content: center; padding: 13px; font-size: 15px; }
         .btn-primary:hover { opacity: 0.88; }
+        .btn-quick    { background: var(--purple); color: #fff; }
         .btn-export   { background: var(--info); color: #fff; }
-        .btn-export:hover { opacity: 0.88; }
         .btn-settings { background: var(--surface-alt); color: var(--text-main); border: 1px solid var(--border); }
         .btn-theme    { background: var(--surface-alt); color: var(--text-main); border: 1px solid var(--border); font-size: 16px; padding: 8px 12px; }
-        .btn-delete   { background: transparent; color: var(--danger); border: 1px solid var(--danger); padding: 4px 10px; font-size: 12px; border-radius: 6px; font-family: var(--font); font-weight: 600; cursor: pointer; transition: background 0.15s; }
+        
+        .btn-edit { background: transparent; color: var(--info); border: 1px solid var(--info); padding: 4px 8px; font-size: 12px; border-radius: 6px; font-weight: 600; cursor: pointer; }
+        .btn-edit:hover { background: var(--info); color: #fff; }
+        
+        .btn-delete { background: transparent; color: var(--danger); border: 1px solid var(--danger); padding: 4px 8px; font-size: 12px; border-radius: 6px; font-weight: 600; cursor: pointer; }
         .btn-delete:hover { background: var(--danger); color: #fff; }
 
         .stats-grid {
@@ -142,7 +150,7 @@
             color: var(--text-main);
             line-height: 1.3;
         }
-        .stat-card p.sub { font-size: 14px; font-weight: 500; margin-top: 5px; }
+        .stat-card p.sub { font-size: 13.5px; font-weight: 500; margin-top: 5px; color: var(--text-muted); }
 
         .progress-wrap {
             background: var(--border);
@@ -175,7 +183,6 @@
             cursor: pointer;
             user-select: none;
             border-bottom: 1px solid transparent;
-            transition: border-color 0.2s;
         }
         .panel-header.open { border-color: var(--border); }
         .panel-header h2 { font-size: 15px; font-weight: 700; }
@@ -207,13 +214,24 @@
         }
         input:focus, select:focus { outline: none; border-color: var(--accent); }
 
+        .form-alert {
+            background: rgba(221,107,32,0.12);
+            border: 1px solid var(--warn);
+            color: var(--warn);
+            padding: 10px 14px;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 500;
+            display: none;
+            margin-bottom: 12px;
+        }
+
         .settings-grid {
             display: grid;
             grid-template-columns: repeat(3, 1fr);
             gap: 14px;
         }
         @media (max-width: 600px) { .settings-grid { grid-template-columns: 1fr; } }
-        .settings-note { font-size: 12px; color: var(--text-muted); margin-top: 12px; }
 
         .table-wrap { overflow-x: auto; }
         table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
@@ -230,27 +248,24 @@
             white-space: nowrap;
         }
         tbody td { padding: 10px 12px; border-bottom: 1px solid var(--border); vertical-align: middle; }
-        tbody tr:last-child td { border-bottom: none; }
         tbody tr:hover td { background: var(--surface-alt); }
 
-        @keyframes flashGreen {
-            0%   { background-color: rgba(0,184,148,0.25); }
-            100% { background-color: transparent; }
-        }
-        .row-new td { animation: flashGreen 2.5s ease-out; }
+        /* Evidențiere Eficiență */
+        tr.best-efficiency td { background: rgba(0, 184, 148, 0.08) !important; }
+        tr.worst-efficiency td { background: rgba(229, 62, 62, 0.08) !important; }
 
         .kwh-badge {
             display: inline-block;
             padding: 2px 8px;
             border-radius: 12px;
             font-weight: 700;
-            font-size: 13px;
+            font-size: 12.5px;
         }
         .kwh-good  { background: rgba(0,184,148,0.15); color: var(--accent); }
         .kwh-mid   { background: rgba(221,107,32,0.15); color: var(--warn); }
         .kwh-bad   { background: rgba(229,62,62,0.15);  color: var(--danger); }
 
-        .chart-wrap { position: relative; height: 240px; }
+        .chart-wrap { position: relative; height: 260px; }
 
         #toast {
             position: fixed;
@@ -265,13 +280,20 @@
             opacity: 0;
             transform: translateY(12px);
             transition: opacity 0.3s, transform 0.3s;
-            pointer-events: none;
+            pointer-events: auto;
             z-index: 999;
-            max-width: 300px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            box-shadow: var(--shadow);
         }
         #toast.show { opacity: 1; transform: translateY(0); }
+        #toastBtn { background: var(--accent); color: #fff; border: none; padding: 4px 10px; border-radius: 6px; cursor: pointer; font-weight: 700; font-size: 12px; }
 
         .table-actions { display: flex; gap: 10px; margin-top: 16px; flex-wrap: wrap; }
+        .chart-tabs { display: flex; gap: 8px; margin-bottom: 12px; }
+        .tab-btn { background: var(--surface-alt); border: 1px solid var(--border); color: var(--text-muted); padding: 6px 12px; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer; }
+        .tab-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
 
         .section-label {
             font-size: 12px;
@@ -281,13 +303,20 @@
             letter-spacing: 0.8px;
             margin: 28px 0 12px;
         }
+
+        @media print {
+            .app-header, .header-actions, .panel-toggle, #chargeForm, .table-actions, .chart-tabs, #settingsPanel { display: none !important; }
+            .container { max-width: 100%; padding: 0; }
+            .panel { border: none; box-shadow: none; }
+        }
     </style>
 </head>
 <body>
 
 <header class="app-header">
-    <h1>⚡ Jurnal Zoe <span class="badge">v2</span></h1>
+    <h1>⚡ Jurnal Zoe <span class="badge">Pro v3</span></h1>
     <div class="header-actions">
+        <button class="btn btn-quick" id="quickAddBtn" title="Pre-completează din ultima încărcare">⚡ Adaugă rapid</button>
         <button class="btn btn-theme" id="themeToggle" title="Schimbă tema">🌙</button>
         <button class="btn btn-settings" id="openSettings">⚙ Setări</button>
     </div>
@@ -295,11 +324,12 @@
 
 <div class="container">
 
-    <p class="section-label">Statistici generale</p>
+    <p class="section-label">Statistici generale & Proiecții</p>
     <div class="stats-grid">
         <div class="stat-card" style="border-left-color: var(--accent)">
             <h3>Total Cheltuit</h3>
             <p id="statTotalCost">0 RON</p>
+            <p class="sub" id="statYearProjection">Proiecție an: 0 RON</p>
         </div>
         <div class="stat-card" style="border-left-color: var(--info)">
             <h3>Total Energie</h3>
@@ -308,6 +338,7 @@
         <div class="stat-card" style="border-left-color: var(--warn)">
             <h3>Consum Mediu</h3>
             <p id="statAvgKwh">— kWh/100km</p>
+            <p class="sub" id="statSeasons">Iarnă: — | Vară: —</p>
         </div>
         <div class="stat-card" style="border-left-color: var(--purple)">
             <h3>Cost Mediu Estimat</h3>
@@ -320,12 +351,13 @@
             <p class="sub" id="statEconomyFord"></p>
         </div>
 
-        <div class="stat-card full" style="border-left-color: var(--accent)">
+        <div class="stat-card full" id="cycleCard" style="border-left-color: var(--accent)">
             <h3>Consum ciclu curent (<span id="labelKwhIncluse">120</span> kWh incluși)</h3>
             <p id="statCurrentCycleKwh">0 / 120 kWh (0%)</p>
             <div class="progress-wrap">
                 <div id="cycleProgressBar" class="progress-bar"></div>
             </div>
+            <p class="sub" id="statCycleComparison">Comparație cu ciclul trecut: —</p>
         </div>
 
         <div class="stat-card full" id="estimationCard" style="border-left-color: var(--info)">
@@ -375,7 +407,6 @@
                     <input type="number" id="cfgConsumF" value="10.5" step="0.1">
                 </div>
             </div>
-            <p class="settings-note">ℹ Modificările se aplică imediat și sunt salvate în browser.</p>
             <br>
             <button class="btn btn-primary" id="saveSettings" style="max-width:200px">Salvează setările</button>
         </div>
@@ -384,11 +415,13 @@
     <!-- Formular -->
     <div class="panel">
         <div class="panel-header open" id="formHeader">
-            <h2>+ Adaugă înregistrare</h2>
+            <h2 id="formTitle">+ Adaugă înregistrare</h2>
             <span class="panel-toggle open" id="formToggle">▾</span>
         </div>
         <div class="panel-body" id="formBody">
+            <div class="form-alert" id="formValidationAlert"></div>
             <form id="chargeForm">
+                <input type="hidden" id="editingId" value="">
                 <div class="form-grid">
                     <div class="form-group">
                         <label for="date">Data și ora</label>
@@ -421,8 +454,9 @@
                         <label for="cost">Cost direct (RON)</label>
                         <input type="number" id="cost" step="0.01" placeholder="0.00" value="0">
                     </div>
-                    <div class="form-group full">
+                    <div class="form-group full" style="display:flex; gap:10px;">
                         <button type="submit" class="btn btn-primary" id="submitBtn">Adaugă înregistrare</button>
+                        <button type="button" class="btn btn-settings" id="cancelEditBtn" style="display:none;">Anulează</button>
                     </div>
                 </div>
             </form>
@@ -432,10 +466,14 @@
     <!-- Grafic -->
     <div class="panel">
         <div class="panel-header open" id="chartHeader">
-            <h2>📈 Evoluție consum (kWh/100km)</h2>
+            <h2>📈 Evoluție & Analiză Grafică</h2>
             <span class="panel-toggle open" id="chartToggle">▾</span>
         </div>
         <div class="panel-body" id="chartBody">
+            <div class="chart-tabs">
+                <button class="tab-btn active" id="tabKwhBtn">kWh/100km</button>
+                <button class="tab-btn" id="tabRonBtn">RON/100km</button>
+            </div>
             <div class="chart-wrap">
                 <canvas id="consumptionChart"></canvas>
             </div>
@@ -460,7 +498,7 @@
                             <th>Cost ședință</th>
                             <th>kWh/100km</th>
                             <th>RON/100km</th>
-                            <th></th>
+                            <th>Acțiuni</th>
                         </tr>
                     </thead>
                     <tbody id="logsBody"></tbody>
@@ -468,15 +506,26 @@
             </div>
             <div class="table-actions">
                 <button id="exportCsvBtn" class="btn btn-export">⬇ Descarcă CSV</button>
+                <button id="exportPdfBtn" class="btn btn-settings">📄 Salvează PDF</button>
             </div>
         </div>
     </div>
 
 </div>
 
-<div id="toast"></div>
+<div id="toast">
+    <span id="toastMsg"></span>
+    <button id="toastBtn" style="display:none;">Anulează</button>
+</div>
 
 <script>
+// Service Worker PWA Inline Registration
+if ('serviceWorker' in navigator) {
+    const swCode = `self.addEventListener('fetch', function(e) { e.respondWith(fetch(e.request)); });`;
+    const blob = new Blob([swCode], { type: 'text/javascript' });
+    navigator.serviceWorker.register(URL.createObjectURL(blob)).catch(() => {});
+}
+
 const CFG_KEY = 'zoe_config';
 let cfg = {
     costAbo: 200, kwhIncluse: 120, tarifDep: 2.0, ziStart: 14,
@@ -526,11 +575,22 @@ const collectionRef = db.collection('incarcari_zoe');
 let chartInstance = null;
 let currentLogs   = [];
 let processedLogs = [];
-let isInitialLoad = true;
+let activeChartMetric = 'kwh';
+let undoTimeoutId = null;
+let pendingDeleteId = null;
 
-function toast(msg, duration = 3000) {
+function toast(msg, actionCallback = null, duration = 3500) {
     const t = document.getElementById('toast');
-    t.textContent = msg;
+    const msgEl = document.getElementById('toastMsg');
+    const btnEl = document.getElementById('toastBtn');
+    
+    msgEl.textContent = msg;
+    if (actionCallback) {
+        btnEl.style.display = 'inline-block';
+        btnEl.onclick = () => { actionCallback(); t.classList.remove('show'); };
+    } else {
+        btnEl.style.display = 'none';
+    }
     t.classList.add('show');
     setTimeout(() => t.classList.remove('show'), duration);
 }
@@ -574,11 +634,62 @@ document.getElementById('useSubscription').addEventListener('change', function()
         this.value === 'false' ? 'block' : 'none';
 });
 
+// Validation Alerts
+function validateInputs() {
+    const alertBox = document.getElementById('formValidationAlert');
+    const kmVal = Number(document.getElementById('km').value);
+    const bStart = Number(document.getElementById('batteryStart').value);
+    const bEnd = Number(document.getElementById('batteryEnd').value);
+    const kwhVal = Number(document.getElementById('kwh').value);
+    
+    let msgs = [];
+    if (processedLogs.length > 0 && kmVal > 0) {
+        const lastKm = processedLogs[processedLogs.length - 1].km;
+        if (kmVal <= lastKm && !document.getElementById('editingId').value) {
+            msgs.push(`⚠️ Kilometrajul introdus (${kmVal}) este mai mic sau egal cu ultimul înregistrat (${lastKm} km).`);
+        }
+    }
+
+    if (bEnd > 0 && bStart >= 0 && kwhVal > 0) {
+        const diff = bEnd - bStart;
+        if (diff > 0) {
+            const expectedKwh = diff * 0.52; // ~0.52 kWh per % pe Zoe
+            if (Math.abs(kwhVal - expectedKwh) > 10) {
+                msgs.push(`💡 Atenție: Pentru o diferență de ${diff}% baterie, ~${expectedKwh.toFixed(1)} kWh este valoarea uzuală.`);
+            }
+        }
+    }
+
+    if (msgs.length > 0) {
+        alertBox.innerHTML = msgs.join('<br>');
+        alertBox.style.display = 'block';
+    } else {
+        alertBox.style.display = 'none';
+    }
+}
+
+['km', 'batteryStart', 'batteryEnd', 'kwh'].forEach(id => {
+    document.getElementById(id).addEventListener('input', validateInputs);
+});
+
+// Quick Add Button
+document.getElementById('quickAddBtn').addEventListener('click', () => {
+    if (processedLogs.length === 0) return toast('Nu există încărcări anterioare.');
+    const last = processedLogs[processedLogs.length - 1];
+    document.getElementById('km').value = last.km + 50;
+    document.getElementById('batteryStart').value = last.batteryEnd;
+    document.getElementById('batteryEnd').value = 80;
+    setDefaultDate();
+    validateInputs();
+    toast('⚡ Date pre-completate din ultima ședință!');
+});
+
+// Submit Form (Add or Edit)
 document.getElementById('chargeForm').addEventListener('submit', async function(e) {
     e.preventDefault();
     const submitBtn = document.getElementById('submitBtn');
+    const editingId = document.getElementById('editingId').value;
     submitBtn.disabled = true;
-    submitBtn.textContent = 'Se salvează…';
 
     const isSub = document.getElementById('useSubscription').value === 'true';
     const entry = {
@@ -593,41 +704,95 @@ document.getElementById('chargeForm').addEventListener('submit', async function(
     };
 
     try {
-        await collectionRef.add(entry);
-        this.reset();
-        document.getElementById('customCostContainer').style.display = 'none';
-        setDefaultDate();
-        toast('✅ Înregistrare salvată!');
+        if (editingId) {
+            await collectionRef.doc(editingId).update(entry);
+            toast('✅ Înregistrare modificată!');
+            resetEditMode();
+        } else {
+            await collectionRef.add(entry);
+            this.reset();
+            document.getElementById('customCostContainer').style.display = 'none';
+            setDefaultDate();
+            toast('✅ Înregistrare salvată!');
+        }
+        document.getElementById('formValidationAlert').style.display = 'none';
     } catch(err) {
-        toast('❌ Eroare: ' + err.message, 5000);
+        toast('❌ Eroare: ' + err.message, null, 5000);
     } finally {
         submitBtn.disabled = false;
-        submitBtn.textContent = 'Adaugă înregistrare';
     }
 });
 
+function resetEditMode() {
+    document.getElementById('editingId').value = '';
+    document.getElementById('submitBtn').textContent = 'Adaugă înregistrare';
+    document.getElementById('formTitle').textContent = '+ Adaugă înregistrare';
+    document.getElementById('cancelEditBtn').style.display = 'none';
+    document.getElementById('chargeForm').reset();
+    setDefaultDate();
+}
+
+document.getElementById('cancelEditBtn').addEventListener('click', resetEditMode);
+
 collectionRef.onSnapshot(snapshot => {
-    let newIds = [];
-    snapshot.docChanges().forEach(ch => {
-        if (ch.type === 'added' && !isInitialLoad) newIds.push(ch.doc.id);
-    });
     const logs = [];
     snapshot.forEach(doc => logs.push({ id: doc.id, ...doc.data() }));
     logs.sort((a, b) => new Date(a.date) - new Date(b.date));
     currentLogs = logs;
-    renderApp(logs, newIds);
-    isInitialLoad = false;
-}, err => toast('❌ Eroare citire: ' + err.message, 6000));
+    renderApp(logs);
+}, err => toast('❌ Eroare citire: ' + err.message, null, 6000));
 
-document.getElementById('logsBody').addEventListener('click', async function(e) {
-    if (!e.target.matches('.btn-delete')) return;
-    const id = e.target.dataset.id;
-    if (!id || !confirm('Sigur vrei să ștergi această înregistrare?')) return;
-    try {
-        await collectionRef.doc(id).delete();
-        toast('🗑 Înregistrare ștearsă');
-    } catch(err) {
-        toast('❌ Eroare ștergere: ' + err.message, 5000);
+// Table Click Actions (Edit & Undo Delete)
+document.getElementById('logsBody').addEventListener('click', function(e) {
+    const editBtn = e.target.closest('.btn-edit');
+    const deleteBtn = e.target.closest('.btn-delete');
+
+    if (editBtn) {
+        const id = editBtn.dataset.id;
+        const log = processedLogs.find(l => l.id === id);
+        if (!log) return;
+
+        document.getElementById('editingId').value = log.id;
+        document.getElementById('date').value = log.date;
+        document.getElementById('km').value = log.km;
+        document.getElementById('batteryStart').value = log.batteryStart;
+        document.getElementById('batteryEnd').value = log.batteryEnd;
+        document.getElementById('kwh').value = log.kwh;
+        document.getElementById('useSubscription').value = log.isSubscription ? 'true' : 'false';
+        document.getElementById('customCostContainer').style.display = log.isSubscription ? 'none' : 'block';
+        document.getElementById('cost').value = log.manualCost || 0;
+
+        document.getElementById('submitBtn').textContent = 'Salvează modificările';
+        document.getElementById('formTitle').textContent = '✏️ Editează înregistrarea';
+        document.getElementById('cancelEditBtn').style.display = 'inline-block';
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    if (deleteBtn) {
+        const id = deleteBtn.dataset.id;
+        if (!id) return;
+
+        pendingDeleteId = id;
+        const filtered = currentLogs.filter(l => l.id !== id);
+        renderApp(filtered);
+
+        toast('🗑 Înregistrare în curs de ștergere...', () => {
+            clearTimeout(undoTimeoutId);
+            pendingDeleteId = null;
+            renderApp(currentLogs);
+            toast('↩️ Ștergere anulată!');
+        }, 5000);
+
+        undoTimeoutId = setTimeout(async () => {
+            if (pendingDeleteId === id) {
+                try {
+                    await collectionRef.doc(id).delete();
+                    pendingDeleteId = null;
+                } catch(err) {
+                    toast('❌ Eroare ștergere: ' + err.message);
+                }
+            }
+        }, 5000);
     }
 });
 
@@ -648,14 +813,17 @@ function kwhBadge(val) {
     return `<span class="kwh-badge ${cls}">${v.toFixed(2)}</span>`;
 }
 
-function renderApp(logs, newIds = []) {
+function renderApp(logs) {
     const tbody = document.getElementById('logsBody');
     tbody.innerHTML = '';
 
     let totalKwh = 0;
-    const chartLabels = [], chartData = [];
+    const chartLabels = [], chartKwhData = [], chartRonData = [];
     const cycleTracker = {};
     const activeCycles = new Set();
+
+    let winterKwh = 0, winterKm = 0;
+    let summerKwh = 0, summerKm = 0;
 
     const computed = logs.map(log => {
         totalKwh += Number(log.kwh);
@@ -677,10 +845,29 @@ function renderApp(logs, newIds = []) {
 
     processedLogs = computed;
 
+    // Detectare minim/maxim consum
+    let minKwh100 = Infinity, maxKwh100 = -Infinity;
+    computed.forEach((log, i) => {
+        if (i > 0) {
+            const dist = log.km - computed[i - 1].km;
+            if (dist > 0) {
+                const k100 = (log.kwh / dist) * 100;
+                if (k100 < minKwh100) minKwh100 = k100;
+                if (k100 > maxKwh100) maxKwh100 = k100;
+
+                // Sezoane: Iarnă (11, 12, 1, 2, 3) vs Vară (4-10)
+                const month = new Date(log.date).getMonth() + 1;
+                if ([11, 12, 1, 2, 3].includes(month)) {
+                    winterKwh += log.kwh; winterKm += dist;
+                } else {
+                    summerKwh += log.kwh; summerKm += dist;
+                }
+            }
+        }
+    });
+
     computed.forEach((log, i) => {
         const row = document.createElement('tr');
-        if (newIds.includes(log.id)) row.classList.add('row-new');
-
         const d = new Date(log.date);
         const dateStr = d.toLocaleDateString('ro-RO') + ' ' +
                         d.toLocaleTimeString('ro-RO', { hour: '2-digit', minute: '2-digit' });
@@ -692,7 +879,11 @@ function renderApp(logs, newIds = []) {
                 kwhPer100 = (log.kwh / dist) * 100;
                 ronPer100 = (log.computedCost / dist) * 100;
                 chartLabels.push(dateStr);
-                chartData.push(kwhPer100.toFixed(2));
+                chartKwhData.push(kwhPer100.toFixed(2));
+                chartRonData.push(ronPer100.toFixed(2));
+
+                if (kwhPer100 === minKwh100 && minKwh100 !== maxKwh100) row.classList.add('best-efficiency');
+                if (kwhPer100 === maxKwh100 && minKwh100 !== maxKwh100) row.classList.add('worst-efficiency');
             }
         }
 
@@ -704,7 +895,10 @@ function renderApp(logs, newIds = []) {
             <td>${log.computedCost.toFixed(2)} RON</td>
             <td>${kwhBadge(kwhPer100)}</td>
             <td>${ronPer100 !== null ? `<span style="color:var(--text-muted)">${ronPer100.toFixed(2)}</span>` : '<span style="color:var(--text-muted)">—</span>'}</td>
-            <td><button class="btn-delete" data-id="${log.id}">Șterge</button></td>
+            <td style="white-space:nowrap;">
+                <button class="btn-edit" data-id="${log.id}">✏️ Edit</button>
+                <button class="btn-delete" data-id="${log.id}">Șterge</button>
+            </td>
         `;
         tbody.appendChild(row);
     });
@@ -715,6 +909,15 @@ function renderApp(logs, newIds = []) {
     document.getElementById('statTotalCost').textContent = grandTotalCost.toFixed(2) + ' RON';
     document.getElementById('statTotalKwh').textContent  = totalKwh.toFixed(2) + ' kWh';
 
+    // Proiecție an curent
+    const yearProjection = activeCycles.size > 0 ? (grandTotalCost / activeCycles.size) * 12 : grandTotalCost;
+    document.getElementById('statYearProjection').textContent = `Proiecție an: ~${yearProjection.toFixed(0)} RON`;
+
+    // Statistici sezoane
+    const avgWinter = winterKm > 0 ? ((winterKwh / winterKm) * 100).toFixed(1) : '—';
+    const avgSummer = summerKm > 0 ? ((summerKwh / summerKm) * 100).toFixed(1) : '—';
+    document.getElementById('statSeasons').textContent = `❄️ Iarnă: ${avgWinter} | ☀️ Vară: ${avgSummer} kWh/100km`;
+
     const now = new Date();
     const currentCycleKey = getCycleKey(now.toISOString());
     const currentCycleKwh = cycleTracker[currentCycleKey] || 0;
@@ -722,9 +925,34 @@ function renderApp(logs, newIds = []) {
 
     document.getElementById('statCurrentCycleKwh').textContent =
         `${currentCycleKwh.toFixed(2)} / ${cfg.kwhIncluse} kWh (${pct.toFixed(1)}%)`;
+    
+    // Alerte Cota 80% si 100%
     const bar = document.getElementById('cycleProgressBar');
+    const cycleCard = document.getElementById('cycleCard');
     bar.style.width = pct + '%';
-    bar.style.background = pct >= 100 ? 'var(--danger)' : 'var(--accent)';
+    
+    if (pct >= 100) {
+        bar.style.background = 'var(--danger)';
+        cycleCard.style.borderLeftColor = 'var(--danger)';
+    } else if (pct >= 80) {
+        bar.style.background = 'var(--warn)';
+        cycleCard.style.borderLeftColor = 'var(--warn)';
+    } else {
+        bar.style.background = 'var(--accent)';
+        cycleCard.style.borderLeftColor = 'var(--accent)';
+    }
+
+    // Comparație ciclu trecut
+    const cycleKeysArray = Array.from(activeCycles);
+    if (cycleKeysArray.length > 1) {
+        const prevKey = cycleKeysArray[cycleKeysArray.length - 2];
+        const prevKwh = cycleTracker[prevKey] || 0;
+        const diffKwh = currentCycleKwh - prevKwh;
+        const sign = diffKwh >= 0 ? '+' : '';
+        document.getElementById('statCycleComparison').textContent = `Comparație ciclu trecut (${prevKwh.toFixed(1)} kWh): ${sign}${diffKwh.toFixed(1)} kWh`;
+    } else {
+        document.getElementById('statCycleComparison').textContent = 'Comparație ciclu trecut: —';
+    }
 
     const cycleStart = new Date(now);
     if (now.getDate() < cfg.ziStart) cycleStart.setMonth(now.getMonth() - 1);
@@ -806,8 +1034,23 @@ function renderApp(logs, newIds = []) {
         document.getElementById('statEconomyFord').textContent = '';
     }
 
-    renderChart(chartLabels, chartData);
+    renderChart(chartLabels, activeChartMetric === 'kwh' ? chartKwhData : chartRonData);
 }
+
+// Dual Chart Switching
+document.getElementById('tabKwhBtn').addEventListener('click', function() {
+    activeChartMetric = 'kwh';
+    this.classList.add('active');
+    document.getElementById('tabRonBtn').classList.remove('active');
+    renderApp(currentLogs);
+});
+
+document.getElementById('tabRonBtn').addEventListener('click', function() {
+    activeChartMetric = 'ron';
+    this.classList.add('active');
+    document.getElementById('tabKwhBtn').classList.remove('active');
+    renderApp(currentLogs);
+});
 
 function renderChart(labels, data) {
     const ctx = document.getElementById('consumptionChart').getContext('2d');
@@ -815,19 +1058,21 @@ function renderChart(labels, data) {
     const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
     const gridColor  = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)';
     const labelColor = '#718096';
+    const metricLabel = activeChartMetric === 'kwh' ? 'kWh / 100 km' : 'RON / 100 km';
+    const metricColor = activeChartMetric === 'kwh' ? '#00b894' : '#805ad5';
 
     chartInstance = new Chart(ctx, {
         type: 'line',
         data: {
             labels,
             datasets: [{
-                label: 'kWh/100km',
+                label: metricLabel,
                 data,
-                borderColor: '#00b894',
-                backgroundColor: 'rgba(0,184,148,0.08)',
+                borderColor: metricColor,
+                backgroundColor: activeChartMetric === 'kwh' ? 'rgba(0,184,148,0.08)' : 'rgba(128,90,213,0.08)',
                 borderWidth: 2,
                 pointRadius: 4,
-                pointBackgroundColor: '#00b894',
+                pointBackgroundColor: metricColor,
                 fill: true,
                 tension: 0.35,
             }]
@@ -838,13 +1083,14 @@ function renderChart(labels, data) {
             plugins: { legend: { labels: { color: labelColor, font: { family: 'Inter', size: 12 } } } },
             scales: {
                 x: { ticks: { color: labelColor, maxRotation: 30 }, grid: { color: gridColor } },
-                y: { beginAtZero: false, title: { display: true, text: 'kWh / 100 km', color: labelColor },
+                y: { beginAtZero: false, title: { display: true, text: metricLabel, color: labelColor },
                      ticks: { color: labelColor }, grid: { color: gridColor } }
             }
         }
     });
 }
 
+// CSV Export
 document.getElementById('exportCsvBtn').addEventListener('click', function() {
     if (!processedLogs.length) return toast('Nu există date de exportat.');
     let csv = '\uFEFFData,Km,Baterie Start (%),Baterie Final (%),kWh,Tip,Cost Calculat (RON)\n';
@@ -859,6 +1105,11 @@ document.getElementById('exportCsvBtn').addEventListener('click', function() {
     a.click();
     document.body.removeChild(a);
     toast('⬇ CSV descărcat!');
+});
+
+// PDF Export (Print View)
+document.getElementById('exportPdfBtn').addEventListener('click', function() {
+    window.print();
 });
 
 function setDefaultDate() {
