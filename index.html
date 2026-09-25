@@ -3,10 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Jurnal Încărcare Zoe Pro - Fixed Edition</title>
+    <title>Jurnal Încărcare Zoe Pro</title>
 
-    <!-- PWA Support via Data URIs -->
-    <link rel="manifest" href='data:application/json,{"name":"Jurnal Zoe Pro","short_name":"ZoePro","start_url":".","display":"standalone","background_color":"#0f1117","theme_color":"#00b894","icons":[{"src":"https://cdn-icons-png.flaticon.com/512/3202/3202052.png","sizes":"512x512","type":"image/png"}]}'>
+    <!-- Favicon SVG Inline -->
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚡</text></svg>">
+
+    <!-- PWA Support via Encoded Data URI -->
+    <link rel="manifest" href="data:application/json,%7B%22name%22%3A%22Jurnal%20Zoe%20Pro%22%2C%22short_name%22%3A%22ZoePro%22%2C%22start_url%22%3A%22.%22%2C%22display%22%3A%22standalone%22%2C%22background_color%22%3A%22%230f1117%22%2C%22theme_color%22%3A%22%2300b894%22%7D">
     <meta name="theme-color" content="#00b894">
 
     <!-- Firebase & Chart.js -->
@@ -313,7 +316,7 @@
 <body>
 
 <header class="app-header">
-    <h1>⚡ Jurnal Zoe <span class="badge">Pro v4.1 - Fixed</span></h1>
+    <h1>⚡ Jurnal Zoe <span class="badge">Pro v4.2 - Safe DOM</span></h1>
     <div class="header-actions">
         <button class="btn btn-quick" id="quickAddBtn" title="Pre-completează din ultima încărcare">⚡ Adaugă rapid</button>
         <button class="btn btn-theme" id="themeToggle" title="Schimbă tema">🌙</button>
@@ -562,23 +565,43 @@
 </div>
 
 <script>
+// Helper-e de securitate DOM pentru a preveni crash-ul TypeError
+function setTxt(id, val) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = val;
+}
+function setStyleColor(id, color) {
+    const el = document.getElementById(id);
+    if (el) el.style.color = color;
+}
+function setStyleWidth(id, width) {
+    const el = document.getElementById(id);
+    if (el) el.style.width = width;
+}
+function setStyleBackground(id, bg) {
+    const el = document.getElementById(id);
+    if (el) el.style.background = bg;
+}
+function setStyleBorderLeftColor(id, color) {
+    const el = document.getElementById(id);
+    if (el) el.style.borderLeftColor = color;
+}
+
 if ('serviceWorker' in navigator) {
     const swCode = `self.addEventListener('fetch', function(e) { e.respondWith(fetch(e.request)); });`;
     const blob = new Blob([swCode], { type: 'text/javascript' });
     navigator.serviceWorker.register(URL.createObjectURL(blob)).catch(() => {});
 }
 
-// FUNCȚIE ROBUSTĂ DE PARSARE A DATELOR (FIX PENTRU NaN / INVALID DATE)
+// Parsare sigură de dată
 function parseDate(dateVal) {
     if (!dateVal) return new Date();
     if (dateVal instanceof Date) return dateVal;
     if (typeof dateVal === 'object' && dateVal.toDate) return dateVal.toDate();
     
-    // Încearcă parsarea ISO standard (ex: 2026-09-25T14:26)
     let d = new Date(dateVal);
     if (!isNaN(d.getTime())) return d;
 
-    // Parsare format românesc (ex: 25.09.2026 14:26 sau 25/09/2026, 14:26)
     const match = String(dateVal).match(/(\d{1,2})[\.\/](\d{1,2})[\.\/](\d{4})[\s,]+(\d{1,2}):(\d{2})/);
     if (match) {
         return new Date(
@@ -613,7 +636,7 @@ function saveCfg() {
         if (el) cfg[k] = Number(el.value);
     });
     localStorage.setItem(CFG_KEY, JSON.stringify(cfg));
-    document.getElementById('labelKwhIncluse').textContent = cfg.kwhIncluse;
+    setTxt('labelKwhIncluse', cfg.kwhIncluse);
     renderApp(currentLogs);
     toast('✅ Setări salvate');
 }
@@ -626,7 +649,7 @@ function syncCfgToInputs() {
         const el = document.getElementById('cfg' + suffix);
         if (el) el.value = cfg[key];
     });
-    document.getElementById('labelKwhIncluse').textContent = cfg.kwhIncluse;
+    setTxt('labelKwhIncluse', cfg.kwhIncluse);
 }
 
 const firebaseConfig = {
@@ -653,39 +676,50 @@ function toast(msg, actionCallback = null, duration = 3500) {
     const msgEl = document.getElementById('toastMsg');
     const btnEl = document.getElementById('toastBtn');
     
-    msgEl.textContent = msg;
-    if (actionCallback) {
-        btnEl.style.display = 'inline-block';
-        btnEl.onclick = () => { actionCallback(); t.classList.remove('show'); };
-    } else {
-        btnEl.style.display = 'none';
+    if (msgEl) msgEl.textContent = msg;
+    if (btnEl) {
+        if (actionCallback) {
+            btnEl.style.display = 'inline-block';
+            btnEl.onclick = () => { actionCallback(); t.classList.remove('show'); };
+        } else {
+            btnEl.style.display = 'none';
+        }
     }
-    t.classList.add('show');
-    setTimeout(() => t.classList.remove('show'), duration);
+    if (t) {
+        t.classList.add('show');
+        setTimeout(() => t.classList.remove('show'), duration);
+    }
 }
 
 const themeToggle = document.getElementById('themeToggle');
 function applyTheme(dark) {
     document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
-    themeToggle.textContent = dark ? '☀️' : '🌙';
+    if (themeToggle) themeToggle.textContent = dark ? '☀️' : '🌙';
     localStorage.setItem('zoe_theme', dark ? 'dark' : 'light');
 }
-themeToggle.addEventListener('click', () => {
-    applyTheme(document.documentElement.getAttribute('data-theme') !== 'dark');
-});
+if (themeToggle) {
+    themeToggle.addEventListener('click', () => {
+        applyTheme(document.documentElement.getAttribute('data-theme') !== 'dark');
+    });
+}
 applyTheme(localStorage.getItem('zoe_theme') === 'dark');
 
-document.getElementById('openSettings').addEventListener('click', () => {
-    const p = document.getElementById('settingsPanel');
-    p.style.display = p.style.display === 'none' ? 'block' : 'none';
-});
-document.getElementById('saveSettings').addEventListener('click', saveCfg);
+const openSettingsBtn = document.getElementById('openSettings');
+if (openSettingsBtn) {
+    openSettingsBtn.addEventListener('click', () => {
+        const p = document.getElementById('settingsPanel');
+        if (p) p.style.display = p.style.display === 'none' ? 'block' : 'none';
+    });
+}
+
+const saveSettingsBtn = document.getElementById('saveSettings');
+if (saveSettingsBtn) saveSettingsBtn.addEventListener('click', saveCfg);
 
 function makeCollapsible(headerId, bodyId, toggleId) {
     const header = document.getElementById(headerId);
     const body   = document.getElementById(bodyId);
     const toggle = document.getElementById(toggleId);
-    if (!header) return;
+    if (!header || !body || !toggle) return;
     header.addEventListener('click', () => {
         const isOpen = !body.classList.contains('hidden');
         body.classList.toggle('hidden', isOpen);
@@ -698,22 +732,27 @@ makeCollapsible('chartHeader',    'chartBody',    'chartToggle');
 makeCollapsible('tableHeader',    'tableBody',    'tableToggle');
 makeCollapsible('settingsHeader', 'settingsBody', 'settingsToggle');
 
-document.getElementById('useSubscription').addEventListener('change', function() {
-    document.getElementById('customCostContainer').style.display =
-        this.value === 'false' ? 'block' : 'none';
-});
+const useSubSelect = document.getElementById('useSubscription');
+if (useSubSelect) {
+    useSubSelect.addEventListener('change', function() {
+        const cContainer = document.getElementById('customCostContainer');
+        if (cContainer) cContainer.style.display = (this.value === 'false') ? 'block' : 'none';
+    });
+}
 
 function validateInputs() {
     const alertBox = document.getElementById('formValidationAlert');
-    const kmVal = Number(document.getElementById('km').value);
-    const bStart = Number(document.getElementById('batteryStart').value);
-    const bEnd = Number(document.getElementById('batteryEnd').value);
-    const kwhVal = Number(document.getElementById('kwh').value);
+    if (!alertBox) return;
+
+    const kmVal = Number(document.getElementById('km')?.value || 0);
+    const bStart = Number(document.getElementById('batteryStart')?.value || 0);
+    const bEnd = Number(document.getElementById('batteryEnd')?.value || 0);
+    const kwhVal = Number(document.getElementById('kwh')?.value || 0);
     
     let msgs = [];
     if (processedLogs.length > 0 && kmVal > 0) {
         const lastKm = processedLogs[processedLogs.length - 1].km;
-        if (kmVal <= lastKm && !document.getElementById('editingId').value) {
+        if (kmVal <= lastKm && !document.getElementById('editingId')?.value) {
             msgs.push(`⚠️ Kilometrajul introdus (${kmVal}) este mai mic sau egal cu ultimul înregistrat (${lastKm} km).`);
         }
     }
@@ -740,137 +779,169 @@ function validateInputs() {
 }
 
 ['km', 'batteryStart', 'batteryEnd', 'kwh'].forEach(id => {
-    document.getElementById(id).addEventListener('input', validateInputs);
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('input', validateInputs);
 });
 
-document.getElementById('quickAddBtn').addEventListener('click', () => {
-    if (processedLogs.length === 0) return toast('Nu există încărcări anterioare.');
-    const last = processedLogs[processedLogs.length - 1];
-    document.getElementById('km').value = last.km + 50;
-    document.getElementById('batteryStart').value = last.batteryEnd;
-    document.getElementById('batteryEnd').value = 80;
-    setDefaultDate();
-    validateInputs();
-    toast('⚡ Date pre-completate din ultima ședință!');
-});
+const quickAddBtn = document.getElementById('quickAddBtn');
+if (quickAddBtn) {
+    quickAddBtn.addEventListener('click', () => {
+        if (processedLogs.length === 0) return toast('Nu există încărcări anterioare.');
+        const last = processedLogs[processedLogs.length - 1];
+        const kmEl = document.getElementById('km');
+        const bsEl = document.getElementById('batteryStart');
+        const beEl = document.getElementById('batteryEnd');
+        if (kmEl) kmEl.value = last.km + 50;
+        if (bsEl) bsEl.value = last.batteryEnd;
+        if (beEl) beEl.value = 80;
+        setDefaultDate();
+        validateInputs();
+        toast('⚡ Date pre-completate din ultima ședință!');
+    });
+}
 
-document.getElementById('chargeForm').addEventListener('submit', async function(e) {
-    e.preventDefault();
-    const submitBtn = document.getElementById('submitBtn');
-    const editingId = document.getElementById('editingId').value;
-    submitBtn.disabled = true;
+const chargeFormEl = document.getElementById('chargeForm');
+if (chargeFormEl) {
+    chargeFormEl.addEventListener('submit', async function(e) {
+        e.preventDefault();
+        const submitBtn = document.getElementById('submitBtn');
+        const editingId = document.getElementById('editingId')?.value;
+        if (submitBtn) submitBtn.disabled = true;
 
-    const isSub = document.getElementById('useSubscription').value === 'true';
-    const entry = {
-        date:           document.getElementById('date').value,
-        km:             Number(document.getElementById('km').value),
-        batteryStart:   Number(document.getElementById('batteryStart').value),
-        batteryEnd:     Number(document.getElementById('batteryEnd').value),
-        kwh:            Number(document.getElementById('kwh').value),
-        temp:           document.getElementById('temp').value !== '' ? Number(document.getElementById('temp').value) : null,
-        driveType:      document.getElementById('driveType').value,
-        climate:        document.getElementById('climate').value,
-        isSubscription: isSub,
-        manualCost:     isSub ? 0 : (Number(document.getElementById('cost').value) || 0),
-        createdAt:      firebase.firestore.FieldValue.serverTimestamp(),
-    };
+        const isSub = document.getElementById('useSubscription')?.value === 'true';
+        const entry = {
+            date:           document.getElementById('date')?.value || new Date().toISOString().slice(0, 16),
+            km:             Number(document.getElementById('km')?.value || 0),
+            batteryStart:   Number(document.getElementById('batteryStart')?.value || 0),
+            batteryEnd:     Number(document.getElementById('batteryEnd')?.value || 0),
+            kwh:            Number(document.getElementById('kwh')?.value || 0),
+            temp:           document.getElementById('temp')?.value !== '' ? Number(document.getElementById('temp')?.value) : null,
+            driveType:      document.getElementById('driveType')?.value || 'Mixt',
+            climate:        document.getElementById('climate')?.value || 'Oprit',
+            isSubscription: isSub,
+            manualCost:     isSub ? 0 : (Number(document.getElementById('cost')?.value) || 0),
+            createdAt:      firebase.firestore.FieldValue.serverTimestamp(),
+        };
 
-    try {
-        if (editingId) {
-            await collectionRef.doc(editingId).update(entry);
-            toast('✅ Înregistrare modificată!');
-            resetEditMode();
-        } else {
-            await collectionRef.add(entry);
-            this.reset();
-            document.getElementById('customCostContainer').style.display = 'none';
-            setDefaultDate();
-            toast('✅ Înregistrare salvată!');
+        try {
+            if (editingId) {
+                await collectionRef.doc(editingId).update(entry);
+                toast('✅ Înregistrare modificată!');
+                resetEditMode();
+            } else {
+                await collectionRef.add(entry);
+                this.reset();
+                const cContainer = document.getElementById('customCostContainer');
+                if (cContainer) cContainer.style.display = 'none';
+                setDefaultDate();
+                toast('✅ Înregistrare salvată!');
+            }
+            const alertBox = document.getElementById('formValidationAlert');
+            if (alertBox) alertBox.style.display = 'none';
+        } catch(err) {
+            toast('❌ Eroare: ' + err.message, null, 5000);
+        } finally {
+            if (submitBtn) submitBtn.disabled = false;
         }
-        document.getElementById('formValidationAlert').style.display = 'none';
-    } catch(err) {
-        toast('❌ Eroare: ' + err.message, null, 5000);
-    } finally {
-        submitBtn.disabled = false;
-    }
-});
+    });
+}
 
 function resetEditMode() {
-    document.getElementById('editingId').value = '';
-    document.getElementById('submitBtn').textContent = 'Adaugă înregistrare';
-    document.getElementById('formTitle').textContent = '+ Adaugă înregistrare';
-    document.getElementById('cancelEditBtn').style.display = 'none';
-    document.getElementById('chargeForm').reset();
+    const editIdEl = document.getElementById('editingId');
+    if (editIdEl) editIdEl.value = '';
+    setTxt('submitBtn', 'Adaugă înregistrare');
+    setTxt('formTitle', '+ Adaugă înregistrare');
+    
+    const cancelBtn = document.getElementById('cancelEditBtn');
+    if (cancelBtn) cancelBtn.style.display = 'none';
+    
+    if (chargeFormEl) chargeFormEl.reset();
     setDefaultDate();
 }
 
-document.getElementById('cancelEditBtn').addEventListener('click', resetEditMode);
+const cancelEditBtn = document.getElementById('cancelEditBtn');
+if (cancelEditBtn) cancelEditBtn.addEventListener('click', resetEditMode);
 
 collectionRef.onSnapshot(snapshot => {
     const logs = [];
     snapshot.forEach(doc => logs.push({ id: doc.id, ...doc.data() }));
     
-    // Sortare sigură cu parseDate
     logs.sort((a, b) => parseDate(a.date) - parseDate(b.date));
     currentLogs = logs;
     renderApp(logs);
 }, err => toast('❌ Eroare citire: ' + err.message, null, 6000));
 
-document.getElementById('logsBody').addEventListener('click', function(e) {
-    const editBtn = e.target.closest('.btn-edit');
-    const deleteBtn = e.target.closest('.btn-delete');
+const logsBodyEl = document.getElementById('logsBody');
+if (logsBodyEl) {
+    logsBodyEl.addEventListener('click', function(e) {
+        const editBtn = e.target.closest('.btn-edit');
+        const deleteBtn = e.target.closest('.btn-delete');
 
-    if (editBtn) {
-        const id = editBtn.dataset.id;
-        const log = processedLogs.find(l => l.id === id);
-        if (!log) return;
+        if (editBtn) {
+            const id = editBtn.dataset.id;
+            const log = processedLogs.find(l => l.id === id);
+            if (!log) return;
 
-        document.getElementById('editingId').value = log.id;
-        document.getElementById('date').value = log.date;
-        document.getElementById('km').value = log.km;
-        document.getElementById('batteryStart').value = log.batteryStart;
-        document.getElementById('batteryEnd').value = log.batteryEnd;
-        document.getElementById('kwh').value = log.kwh;
-        document.getElementById('temp').value = log.temp !== undefined && log.temp !== null ? log.temp : '';
-        document.getElementById('driveType').value = log.driveType || 'Mixt';
-        document.getElementById('climate').value = log.climate || 'Oprit';
-        document.getElementById('useSubscription').value = log.isSubscription ? 'true' : 'false';
-        document.getElementById('customCostContainer').style.display = log.isSubscription ? 'none' : 'block';
-        document.getElementById('cost').value = log.manualCost || 0;
+            const editIdEl = document.getElementById('editingId');
+            if (editIdEl) editIdEl.value = log.id;
+            
+            const fields = {
+                'date': log.date,
+                'km': log.km,
+                'batteryStart': log.batteryStart,
+                'batteryEnd': log.batteryEnd,
+                'kwh': log.kwh,
+                'temp': log.temp !== undefined && log.temp !== null ? log.temp : '',
+                'driveType': log.driveType || 'Mixt',
+                'climate': log.climate || 'Oprit',
+                'useSubscription': log.isSubscription ? 'true' : 'false',
+                'cost': log.manualCost || 0
+            };
 
-        document.getElementById('submitBtn').textContent = 'Salvează modificările';
-        document.getElementById('formTitle').textContent = '✏️ Editează înregistrarea';
-        document.getElementById('cancelEditBtn').style.display = 'inline-block';
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-    }
+            Object.entries(fields).forEach(([fId, val]) => {
+                const el = document.getElementById(fId);
+                if (el) el.value = val;
+            });
 
-    if (deleteBtn) {
-        const id = deleteBtn.dataset.id;
-        if (!id) return;
+            const cContainer = document.getElementById('customCostContainer');
+            if (cContainer) cContainer.style.display = log.isSubscription ? 'none' : 'block';
 
-        pendingDeleteId = id;
-        const filtered = currentLogs.filter(l => l.id !== id);
-        renderApp(filtered);
+            setTxt('submitBtn', 'Salvează modificările');
+            setTxt('formTitle', '✏️ Editează înregistrarea');
+            
+            const cancelBtn = document.getElementById('cancelEditBtn');
+            if (cancelBtn) cancelBtn.style.display = 'inline-block';
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
 
-        toast('🗑 Înregistrare în curs de ștergere...', () => {
-            clearTimeout(undoTimeoutId);
-            pendingDeleteId = null;
-            renderApp(currentLogs);
-            toast('↩️ Ștergere anulată!');
-        }, 5000);
+        if (deleteBtn) {
+            const id = deleteBtn.dataset.id;
+            if (!id) return;
 
-        undoTimeoutId = setTimeout(async () => {
-            if (pendingDeleteId === id) {
-                try {
-                    await collectionRef.doc(id).delete();
-                    pendingDeleteId = null;
-                } catch(err) {
-                    toast('❌ Eroare ștergere: ' + err.message);
+            pendingDeleteId = id;
+            const filtered = currentLogs.filter(l => l.id !== id);
+            renderApp(filtered);
+
+            toast('🗑 Înregistrare în curs de ștergere...', () => {
+                clearTimeout(undoTimeoutId);
+                pendingDeleteId = null;
+                renderApp(currentLogs);
+                toast('↩️ Ștergere anulată!');
+            }, 5000);
+
+            undoTimeoutId = setTimeout(async () => {
+                if (pendingDeleteId === id) {
+                    try {
+                        await collectionRef.doc(id).delete();
+                        pendingDeleteId = null;
+                    } catch(err) {
+                        toast('❌ Eroare ștergere: ' + err.message);
+                    }
                 }
-            }
-        }, 5000);
-    }
-});
+            }, 5000);
+        }
+    });
+}
 
 function getCycleKey(dateStr) {
     const d = parseDate(dateStr);
@@ -891,7 +962,7 @@ function kwhBadge(val) {
 
 function renderApp(logs) {
     const tbody = document.getElementById('logsBody');
-    tbody.innerHTML = '';
+    if (tbody) tbody.innerHTML = '';
 
     let totalPlugKwh = 0;
     const chartLabels = [], chartKwhData = [], chartRonData = [];
@@ -952,7 +1023,7 @@ function renderApp(logs) {
     const last5 = validKwhList.slice(-5);
     const m3Val = last3.length > 0 ? (last3.reduce((a, b) => a + b, 0) / last3.length).toFixed(1) : '—';
     const m5Val = last5.length > 0 ? (last5.reduce((a, b) => a + b, 0) / last5.length).toFixed(1) : '—';
-    document.getElementById('statMovingAvgs').textContent = `M3: ${m3Val} | M5: ${m5Val} kWh/100km`;
+    setTxt('statMovingAvgs', `M3: ${m3Val} | M5: ${m5Val} kWh/100km`);
 
     computed.forEach((log, i) => {
         const row = document.createElement('tr');
@@ -994,15 +1065,15 @@ function renderApp(logs) {
                 <button class="btn-delete" data-id="${log.id}">Șterge</button>
             </td>
         `;
-        tbody.appendChild(row);
+        if (tbody) tbody.appendChild(row);
     });
 
     const totalExtraCosts = computed.reduce((a, l) => a + l.computedCost, 0);
     const grandTotalCost  = (activeCycles.size * cfg.costAbo) + totalExtraCosts;
 
-    document.getElementById('statTotalCost').textContent = grandTotalCost.toFixed(2) + ' RON';
-    document.getElementById('statTotalKwh').textContent  = totalPlugKwh.toFixed(2) + ' kWh';
-    document.getElementById('statBatteryVsPlug').textContent = `Priză: ${totalPlugKwh.toFixed(1)} kWh | În baterie: ~${totalBatteryKwhEst.toFixed(1)} kWh`;
+    setTxt('statTotalCost', grandTotalCost.toFixed(2) + ' RON');
+    setTxt('statTotalKwh', totalPlugKwh.toFixed(2) + ' kWh');
+    setTxt('statBatteryVsPlug', `Priză: ${totalPlugKwh.toFixed(1)} kWh | În baterie: ~${totalBatteryKwhEst.toFixed(1)} kWh`);
 
     let avgConsumption = 15.0, totalDistAll = 0;
     let currentOdometer = computed.length > 0 ? computed[computed.length - 1].km : 0;
@@ -1016,43 +1087,40 @@ function renderApp(logs) {
     }
 
     const realCostPer100 = totalDistAll > 0 ? (grandTotalCost / totalDistAll) * 100 : 0;
-    document.getElementById('statAvgCostReal').textContent = realCostPer100 > 0 ? `${realCostPer100.toFixed(2)} RON/100km` : '— RON/100km';
+    setTxt('statAvgCostReal', realCostPer100 > 0 ? `${realCostPer100.toFixed(2)} RON/100km` : '— RON/100km');
 
     const range100 = (capUtil / avgConsumption) * 100;
     const range80 = (range100 * 0.8);
     const range20to80 = (range100 * 0.6);
 
-    document.getElementById('statHealthOverview').textContent = `SOH: ${cfg.soh}% | Cap. Utilă: ${capUtil.toFixed(2)} kWh | Km Actuali: ${currentOdometer.toLocaleString('ro-RO')} km`;
-    document.getElementById('statRangeOverview').textContent = `Autonomie est. (100%): ~${range100.toFixed(0)} km | (80%): ~${range80.toFixed(0)} km | Utilizabil (20% → 80%): ~${range20to80.toFixed(0)} km`;
+    setTxt('statHealthOverview', `SOH: ${cfg.soh}% | Cap. Utilă: ${capUtil.toFixed(2)} kWh | Km Actuali: ${currentOdometer.toLocaleString('ro-RO')} km`);
+    setTxt('statRangeOverview', `Autonomie est. (100%): ~${range100.toFixed(0)} km | (80%): ~${range80.toFixed(0)} km | Utilizabil (20% → 80%): ~${range20to80.toFixed(0)} km`);
 
     const yearProjection = activeCycles.size > 0 ? (grandTotalCost / activeCycles.size) * 12 : grandTotalCost;
-    document.getElementById('statYearProjection').textContent = `Proiecție an: ~${yearProjection.toFixed(0)} RON`;
+    setTxt('statYearProjection', `Proiecție an: ~${yearProjection.toFixed(0)} RON`);
 
     const avgWinter = winterKm > 0 ? ((winterKwh / winterKm) * 100).toFixed(1) : '—';
     const avgSummer = summerKm > 0 ? ((summerKwh / summerKm) * 100).toFixed(1) : '—';
-    document.getElementById('statSeasons').textContent = `❄️ Iarnă: ${avgWinter} | ☀️ Vară: ${avgSummer} kWh/100km`;
+    setTxt('statSeasons', `❄️ Iarnă: ${avgWinter} | ☀️ Vară: ${avgSummer} kWh/100km`);
 
     const now = new Date();
     const currentCycleKey = getCycleKey(now.toISOString());
     const currentCycleKwh = cycleTracker[currentCycleKey] || 0;
     const pct = Math.min(100, (currentCycleKwh / cfg.kwhIncluse) * 100);
 
-    document.getElementById('statCurrentCycleKwh').textContent =
-        `${currentCycleKwh.toFixed(2)} / ${cfg.kwhIncluse} kWh (${pct.toFixed(1)}%)`;
+    setTxt('statCurrentCycleKwh', `${currentCycleKwh.toFixed(2)} / ${cfg.kwhIncluse} kWh (${pct.toFixed(1)}%)`);
     
-    const bar = document.getElementById('cycleProgressBar');
-    const cycleCard = document.getElementById('cycleCard');
-    bar.style.width = pct + '%';
+    setStyleWidth('cycleProgressBar', pct + '%');
     
     if (pct >= 100) {
-        bar.style.background = 'var(--danger)';
-        cycleCard.style.borderLeftColor = 'var(--danger)';
+        setStyleBackground('cycleProgressBar', 'var(--danger)');
+        setStyleBorderLeftColor('cycleCard', 'var(--danger)');
     } else if (pct >= 80) {
-        bar.style.background = 'var(--warn)';
-        cycleCard.style.borderLeftColor = 'var(--warn)';
+        setStyleBackground('cycleProgressBar', 'var(--warn)');
+        setStyleBorderLeftColor('cycleCard', 'var(--warn)');
     } else {
-        bar.style.background = 'var(--accent)';
-        cycleCard.style.borderLeftColor = 'var(--accent)';
+        setStyleBackground('cycleProgressBar', 'var(--accent)');
+        setStyleBorderLeftColor('cycleCard', 'var(--accent)');
     }
 
     const cycleKeysArray = Array.from(activeCycles);
@@ -1061,9 +1129,9 @@ function renderApp(logs) {
         const prevKwh = cycleTracker[prevKey] || 0;
         const diffKwh = currentCycleKwh - prevKwh;
         const sign = diffKwh >= 0 ? '+' : '';
-        document.getElementById('statCycleComparison').textContent = `Comparație ciclu trecut (${prevKwh.toFixed(1)} kWh): ${sign}${diffKwh.toFixed(1)} kWh`;
+        setTxt('statCycleComparison', `Comparație ciclu trecut (${prevKwh.toFixed(1)} kWh): ${sign}${diffKwh.toFixed(1)} kWh`);
     } else {
-        document.getElementById('statCycleComparison').textContent = 'Comparație ciclu trecut: —';
+        setTxt('statCycleComparison', 'Comparație ciclu trecut: —');
     }
 
     const cycleStart = new Date(now);
@@ -1088,74 +1156,78 @@ function renderApp(logs) {
     const projKm    = dailyRate * daysRemaining;
     const projTotal = currentCycleKwh + (projKm * avgConsumption) / 100;
 
-    const estCard = document.getElementById('estimationCard');
-    const estElem = document.getElementById('statEstimation');
-
     if (currentCycleKwh === 0) {
-        estElem.textContent = 'Nu există încărcări în ciclul curent.';
-        estCard.style.borderLeftColor = 'var(--text-muted)';
+        setTxt('statEstimation', 'Nu există încărcări în ciclul curent.');
+        setStyleBorderLeftColor('estimationCard', 'var(--text-muted)');
     } else if (projTotal <= cfg.kwhIncluse) {
-        estElem.textContent = `🟢 La ~${dailyRate.toFixed(1)} km/zi, vei parcurge ~${projKm.toFixed(0)} km până pe ${cfg.ziStart}. Consum estimat: ~${projTotal.toFixed(1)} kWh (surplus ~${(cfg.kwhIncluse - projTotal).toFixed(1)} kWh).`;
-        estCard.style.borderLeftColor = 'var(--accent)';
+        setTxt('statEstimation', `🟢 La ~${dailyRate.toFixed(1)} km/zi, vei parcurge ~${projKm.toFixed(0)} km până pe ${cfg.ziStart}. Consum estimat: ~${projTotal.toFixed(1)} kWh (surplus ~${(cfg.kwhIncluse - projTotal).toFixed(1)} kWh).`);
+        setStyleBorderLeftColor('estimationCard', 'var(--accent)');
     } else {
         const over = projTotal - cfg.kwhIncluse;
-        estElem.textContent = `🔴 La ~${dailyRate.toFixed(1)} km/zi, vei depăși cota cu ~${over.toFixed(1)} kWh (cost suplimentar estimat: ~${(over * cfg.tarifDep).toFixed(2)} RON).`;
-        estCard.style.borderLeftColor = 'var(--danger)';
+        setTxt('statEstimation', `🔴 La ~${dailyRate.toFixed(1)} km/zi, vei depăși cota cu ~${over.toFixed(1)} kWh (cost suplimentar estimat: ~${(over * cfg.tarifDep).toFixed(2)} RON).`);
+        setStyleBorderLeftColor('estimationCard', 'var(--danger)');
     }
 
     if (totalDistAll > 0) {
         const projTotalKm = (kmInCycle > 0 ? kmInCycle : totalDistAll) + projKm;
-        document.getElementById('statAvgKwh').textContent  = avgConsumption.toFixed(2) + ' kWh/100km';
-        document.getElementById('statAvgCostProj').textContent = 'Proiectat: ~' + ((grandTotalCost / projTotalKm) * 100).toFixed(2) + ' RON/100km';
+        setTxt('statAvgKwh', avgConsumption.toFixed(2) + ' kWh/100km');
+        setTxt('statAvgCostProj', 'Proiectat: ~' + ((grandTotalCost / projTotalKm) * 100).toFixed(2) + ' RON/100km');
 
         const costQ = (totalDistAll / 100) * cfg.consumQ * cfg.pretLitru;
         const costF = (totalDistAll / 100) * cfg.consumF * cfg.pretLitru;
         const ecoQ  = costQ - grandTotalCost;
         const ecoF  = costF - grandTotalCost;
 
-        const elQ = document.getElementById('statEconomyQashqai');
-        const elF = document.getElementById('statEconomyFord');
-
         if (ecoQ >= 0) {
-            elQ.textContent = `🟢 +${ecoQ.toFixed(0)} RON economisiți față de Qashqai (${cfg.consumQ}l/100km)`;
-            elQ.style.color = 'var(--accent)';
+            setTxt('statEconomyQashqai', `🟢 +${ecoQ.toFixed(0)} RON economisiți față de Qashqai (${cfg.consumQ}l/100km)`);
+            setStyleColor('statEconomyQashqai', 'var(--accent)');
         } else {
-            elQ.textContent = `⏳ Qashqai (${cfg.consumQ}l): mai ai ~${Math.ceil((Math.abs(ecoQ) / (cfg.consumQ * cfg.pretLitru)) * 100)} km până la profit net (${ecoQ.toFixed(0)} RON)`;
-            elQ.style.color = 'var(--warn)';
+            setTxt('statEconomyQashqai', `⏳ Qashqai (${cfg.consumQ}l): mai ai ~${Math.ceil((Math.abs(ecoQ) / (cfg.consumQ * cfg.pretLitru)) * 100)} km până la profit net (${ecoQ.toFixed(0)} RON)`);
+            setStyleColor('statEconomyQashqai', 'var(--warn)');
         }
         if (ecoF >= 0) {
-            elF.textContent = `🟢 +${ecoF.toFixed(0)} RON economisiți față de Ford (${cfg.consumF}l/100km)`;
-            elF.style.color = 'var(--accent)';
+            setTxt('statEconomyFord', `🟢 +${ecoF.toFixed(0)} RON economisiți față de Ford (${cfg.consumF}l/100km)`);
+            setStyleColor('statEconomyFord', 'var(--accent)');
         } else {
-            elF.textContent = `⏳ Ford (${cfg.consumF}l): mai ai ~${Math.ceil((Math.abs(ecoF) / (cfg.consumF * cfg.pretLitru)) * 100)} km până la profit net (${ecoF.toFixed(0)} RON)`;
-            elF.style.color = 'var(--warn)';
+            setTxt('statEconomyFord', `⏳ Ford (${cfg.consumF}l): mai ai ~${Math.ceil((Math.abs(ecoF) / (cfg.consumF * cfg.pretLitru)) * 100)} km până la profit net (${ecoF.toFixed(0)} RON)`);
+            setStyleColor('statEconomyFord', 'var(--warn)');
         }
     } else {
-        document.getElementById('statAvgKwh').textContent = '— kWh/100km';
-        document.getElementById('statAvgCostProj').textContent = 'Proiectat: ~— RON/100km';
-        document.getElementById('statEconomyQashqai').textContent = 'Vom calcula după prima cursă.';
-        document.getElementById('statEconomyFord').textContent = '';
+        setTxt('statAvgKwh', '— kWh/100km');
+        setTxt('statAvgCostProj', 'Proiectat: ~— RON/100km');
+        setTxt('statEconomyQashqai', 'Vom calcula după prima cursă.');
+        setTxt('statEconomyFord', '');
     }
 
     renderChart(chartLabels, activeChartMetric === 'kwh' ? chartKwhData : chartRonData);
 }
 
-document.getElementById('tabKwhBtn').addEventListener('click', function() {
-    activeChartMetric = 'kwh';
-    this.classList.add('active');
-    document.getElementById('tabRonBtn').classList.remove('active');
-    renderApp(currentLogs);
-});
+const tabKwhBtn = document.getElementById('tabKwhBtn');
+if (tabKwhBtn) {
+    tabKwhBtn.addEventListener('click', function() {
+        activeChartMetric = 'kwh';
+        this.classList.add('active');
+        const rBtn = document.getElementById('tabRonBtn');
+        if (rBtn) rBtn.classList.remove('active');
+        renderApp(currentLogs);
+    });
+}
 
-document.getElementById('tabRonBtn').addEventListener('click', function() {
-    activeChartMetric = 'ron';
-    this.classList.add('active');
-    document.getElementById('tabKwhBtn').classList.remove('active');
-    renderApp(currentLogs);
-});
+const tabRonBtn = document.getElementById('tabRonBtn');
+if (tabRonBtn) {
+    tabRonBtn.addEventListener('click', function() {
+        activeChartMetric = 'ron';
+        this.classList.add('active');
+        const kBtn = document.getElementById('tabKwhBtn');
+        if (kBtn) kBtn.classList.remove('active');
+        renderApp(currentLogs);
+    });
+}
 
 function renderChart(labels, data) {
-    const ctx = document.getElementById('consumptionChart').getContext('2d');
+    const canvas = document.getElementById('consumptionChart');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
     if (chartInstance) chartInstance.destroy();
     
     if (!labels || labels.length === 0) return;
@@ -1195,30 +1267,37 @@ function renderChart(labels, data) {
     });
 }
 
-document.getElementById('exportCsvBtn').addEventListener('click', function() {
-    if (!processedLogs.length) return toast('Nu există date de exportat.');
-    let csv = '\uFEFFData,Km,Baterie Start (%),Baterie Final (%),kWh Priză,Temp (°C),Traseu,Climatizare,Tip,Cost Calculat (RON)\n';
-    processedLogs.forEach(log => {
-        csv += `"${log.date}","${log.km}","${log.batteryStart}","${log.batteryEnd}","${log.kwh}","${log.temp !== undefined ? log.temp : ''}","${log.driveType || ''}","${log.climate || ''}","${log.isSubscription ? 'Abonament' : 'Direct'}","${log.computedCost.toFixed(2)}"\n`;
+const exportCsvBtn = document.getElementById('exportCsvBtn');
+if (exportCsvBtn) {
+    exportCsvBtn.addEventListener('click', function() {
+        if (!processedLogs.length) return toast('Nu există date de exportat.');
+        let csv = '\uFEFFData,Km,Baterie Start (%),Baterie Final (%),kWh Priză,Temp (°C),Traseu,Climatizare,Tip,Cost Calculat (RON)\n';
+        processedLogs.forEach(log => {
+            csv += `"${log.date}","${log.km}","${log.batteryStart}","${log.batteryEnd}","${log.kwh}","${log.temp !== undefined ? log.temp : ''}","${log.driveType || ''}","${log.climate || ''}","${log.isSubscription ? 'Abonament' : 'Direct'}","${log.computedCost.toFixed(2)}"\n`;
+        });
+        const a = Object.assign(document.createElement('a'), {
+            href: URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' })),
+            download: `jurnal_zoe_${new Date().toISOString().slice(0,10)}.csv`
+        });
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        toast('⬇ CSV descărcat!');
     });
-    const a = Object.assign(document.createElement('a'), {
-        href: URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' })),
-        download: `jurnal_zoe_${new Date().toISOString().slice(0,10)}.csv`
-    });
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    toast('⬇ CSV descărcat!');
-});
+}
 
-document.getElementById('exportPdfBtn').addEventListener('click', function() {
-    window.print();
-});
+const exportPdfBtn = document.getElementById('exportPdfBtn');
+if (exportPdfBtn) {
+    exportPdfBtn.addEventListener('click', function() {
+        window.print();
+    });
+}
 
 function setDefaultDate() {
     const now = new Date();
     now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
-    document.getElementById('date').value = now.toISOString().slice(0, 16);
+    const dateEl = document.getElementById('date');
+    if (dateEl) dateEl.value = now.toISOString().slice(0, 16);
 }
 
 loadCfg();
