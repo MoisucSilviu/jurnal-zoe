@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Jurnal Încărcare Zoe Pro</title>
+    <title>Jurnal Încărcare Zoe Pro - Battery & Health Edition</title>
 
     <!-- PWA Support via Data URIs -->
     <link rel="manifest" href='data:application/json,{"name":"Jurnal Zoe Pro","short_name":"ZoePro","start_url":".","display":"standalone","background_color":"#0f1117","theme_color":"#00b894","icons":[{"src":"https://cdn-icons-png.flaticon.com/512/3202/3202052.png","sizes":"512x512","type":"image/png"}]}'>
@@ -150,7 +150,7 @@
             color: var(--text-main);
             line-height: 1.3;
         }
-        .stat-card p.sub { font-size: 13.5px; font-weight: 500; margin-top: 5px; color: var(--text-muted); }
+        .stat-card p.sub { font-size: 13px; font-weight: 500; margin-top: 5px; color: var(--text-muted); }
 
         .progress-wrap {
             background: var(--border);
@@ -250,7 +250,6 @@
         tbody td { padding: 10px 12px; border-bottom: 1px solid var(--border); vertical-align: middle; }
         tbody tr:hover td { background: var(--surface-alt); }
 
-        /* Evidențiere Eficiență */
         tr.best-efficiency td { background: rgba(0, 184, 148, 0.08) !important; }
         tr.worst-efficiency td { background: rgba(229, 62, 62, 0.08) !important; }
 
@@ -314,7 +313,7 @@
 <body>
 
 <header class="app-header">
-    <h1>⚡ Jurnal Zoe <span class="badge">Pro v3</span></h1>
+    <h1>⚡ Jurnal Zoe <span class="badge">Pro v4 - Battery Profile</span></h1>
     <div class="header-actions">
         <button class="btn btn-quick" id="quickAddBtn" title="Pre-completează din ultima încărcare">⚡ Adaugă rapid</button>
         <button class="btn btn-theme" id="themeToggle" title="Schimbă tema">🌙</button>
@@ -324,7 +323,16 @@
 
 <div class="container">
 
-    <p class="section-label">Statistici generale & Proiecții</p>
+    <p class="section-label">Stare Mașină & Autonomie Estimată</p>
+    <div class="stats-grid">
+        <div class="stat-card full" style="border-left-color: var(--accent); background-color: var(--surface-alt);">
+            <h3>🔋 Profil Baterie & Health Dashboard</h3>
+            <p id="statHealthOverview">SOH: 88% | Cap. Utilă: 19.36 kWh | Km Actuali: —</p>
+            <p class="sub" id="statRangeOverview">Autonomie est. (100%): ~129 km | (80%): ~103 km | Utilizabil (20% → 80%): ~77 km</p>
+        </div>
+    </div>
+
+    <p class="section-label">Statistici Generale & Proiecții</p>
     <div class="stats-grid">
         <div class="stat-card" style="border-left-color: var(--accent)">
             <h3>Total Cheltuit</h3>
@@ -334,15 +342,17 @@
         <div class="stat-card" style="border-left-color: var(--info)">
             <h3>Total Energie</h3>
             <p id="statTotalKwh">0 kWh</p>
+            <p class="sub" id="statBatteryVsPlug">Priză: 0 kWh | Baterie: 0 kWh</p>
         </div>
         <div class="stat-card" style="border-left-color: var(--warn)">
             <h3>Consum Mediu</h3>
             <p id="statAvgKwh">— kWh/100km</p>
-            <p class="sub" id="statSeasons">Iarnă: — | Vară: —</p>
+            <p class="sub" id="statMovingAvgs">M3: — | M5: — kWh/100km</p>
         </div>
         <div class="stat-card" style="border-left-color: var(--purple)">
-            <h3>Cost Mediu Estimat</h3>
-            <p id="statAvgCost">— RON/100km</p>
+            <h3>Cost Mediu</h3>
+            <p id="statAvgCostReal">— RON/100km</p>
+            <p class="sub" id="statAvgCostProj">Proiectat: ~— RON/100km</p>
         </div>
 
         <div class="stat-card full" style="border-left-color: var(--purple)">
@@ -369,11 +379,23 @@
     <!-- Setări -->
     <div class="panel" id="settingsPanel" style="display:none;">
         <div class="panel-header" id="settingsHeader">
-            <h2>⚙ Setări & Parametri</h2>
+            <h2>⚙ Setări, Profil Baterie & Parametri</h2>
             <span class="panel-toggle" id="settingsToggle">▾</span>
         </div>
         <div class="panel-body" id="settingsBody">
             <div class="settings-grid">
+                <div class="form-group">
+                    <label>Capacitate Nominală Baterie (kWh)</label>
+                    <input type="number" id="cfgCapNominal" value="22" step="0.1">
+                </div>
+                <div class="form-group">
+                    <label>SOH Baterie (%)</label>
+                    <input type="number" id="cfgSoh" value="88" step="1" min="1" max="100">
+                </div>
+                <div class="form-group">
+                    <label>Pierderi Încărcare AC (%)</label>
+                    <input type="number" id="cfgPierderi" value="10" step="1" min="0" max="30">
+                </div>
                 <div class="form-group">
                     <label>Cost abonament lunar (RON)</label>
                     <input type="number" id="cfgCostAbo" value="200" step="1">
@@ -395,16 +417,16 @@
                     <input type="number" id="cfgPretLitru" value="7.2" step="0.01">
                 </div>
                 <div class="form-group">
-                    <label>Ritm zilnic implicit (km/zi)</label>
-                    <input type="number" id="cfgDailyKm" value="35" step="1">
-                </div>
-                <div class="form-group">
                     <label>Consum Qashqai (l/100km)</label>
                     <input type="number" id="cfgConsumQ" value="7.4" step="0.1">
                 </div>
                 <div class="form-group">
                     <label>Consum Ford (l/100km)</label>
                     <input type="number" id="cfgConsumF" value="10.5" step="0.1">
+                </div>
+                <div class="form-group">
+                    <label>Ritm zilnic implicit (km/zi)</label>
+                    <input type="number" id="cfgDailyKm" value="35" step="1">
                 </div>
             </div>
             <br>
@@ -440,10 +462,30 @@
                         <input type="number" id="batteryEnd" placeholder="80" min="0" max="100" required>
                     </div>
                     <div class="form-group">
-                        <label for="kwh">Energie încărcată (kWh)</label>
+                        <label for="kwh">Energie încărcată din priză (kWh)</label>
                         <input type="number" id="kwh" step="0.01" placeholder="15.5" required>
                     </div>
                     <div class="form-group">
+                        <label for="temp">Temperatură exterioară (°C)</label>
+                        <input type="number" id="temp" placeholder="ex: 18" step="1">
+                    </div>
+                    <div class="form-group">
+                        <label for="driveType">Traseu predominant</label>
+                        <select id="driveType">
+                            <option value="Urban">Urban</option>
+                            <option value="Extraurban">Extraurban</option>
+                            <option value="Mixt" selected>Mixt</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="climate">Climatizare</label>
+                        <select id="climate">
+                            <option value="Oprit" selected>Oprită</option>
+                            <option value="AC">AC (Răcire)</option>
+                            <option value="Căldură">Căldură</option>
+                        </select>
+                    </div>
+                    <div class="form-group full">
                         <label for="useSubscription">Tip încărcare</label>
                         <select id="useSubscription">
                             <option value="true">Din abonament</option>
@@ -494,7 +536,8 @@
                             <th>Data</th>
                             <th>km</th>
                             <th>Baterie</th>
-                            <th>kWh</th>
+                            <th>Priză / Bat. (kWh)</th>
+                            <th>Condiții</th>
                             <th>Cost ședință</th>
                             <th>kWh/100km</th>
                             <th>RON/100km</th>
@@ -519,7 +562,6 @@
 </div>
 
 <script>
-// Service Worker PWA Inline Registration
 if ('serviceWorker' in navigator) {
     const swCode = `self.addEventListener('fetch', function(e) { e.respondWith(fetch(e.request)); });`;
     const blob = new Blob([swCode], { type: 'text/javascript' });
@@ -528,8 +570,9 @@ if ('serviceWorker' in navigator) {
 
 const CFG_KEY = 'zoe_config';
 let cfg = {
+    capNominal: 22, soh: 88, pierderi: 10,
     costAbo: 200, kwhIncluse: 120, tarifDep: 2.0, ziStart: 14,
-    pretLitru: 7.2, dailyKm: 35, consumQ: 7.4, consumF: 10.5,
+    pretLitru: 7.2, dailyKm: 35, consumQ: 7.4, consumF: 10.5
 };
 
 function loadCfg() {
@@ -539,8 +582,9 @@ function loadCfg() {
     } catch(e) {}
     syncCfgToInputs();
 }
+
 function saveCfg() {
-    ['costAbo','kwhIncluse','tarifDep','ziStart','pretLitru','dailyKm','consumQ','consumF'].forEach(k => {
+    ['capNominal','soh','pierderi','costAbo','kwhIncluse','tarifDep','ziStart','pretLitru','dailyKm','consumQ','consumF'].forEach(k => {
         const el = document.getElementById('cfg' + k.charAt(0).toUpperCase() + k.slice(1));
         if (el) cfg[k] = Number(el.value);
     });
@@ -549,10 +593,11 @@ function saveCfg() {
     renderApp(currentLogs);
     toast('✅ Setări salvate');
 }
+
 function syncCfgToInputs() {
-    const map = { CostAbo:'costAbo', KwhIncluse:'kwhIncluse', TarifDep:'tarifDep',
-                  ZiStart:'ziStart', PretLitru:'pretLitru', DailyKm:'dailyKm',
-                  ConsumQ:'consumQ', ConsumF:'consumF' };
+    const map = { CapNominal:'capNominal', Soh:'soh', Pierderi:'pierderi', CostAbo:'costAbo', 
+                  KwhIncluse:'kwhIncluse', TarifDep:'tarifDep', ZiStart:'ziStart', 
+                  PretLitru:'pretLitru', DailyKm:'dailyKm', ConsumQ:'consumQ', ConsumF:'consumF' };
     Object.entries(map).forEach(([suffix, key]) => {
         const el = document.getElementById('cfg' + suffix);
         if (el) el.value = cfg[key];
@@ -634,7 +679,7 @@ document.getElementById('useSubscription').addEventListener('change', function()
         this.value === 'false' ? 'block' : 'none';
 });
 
-// Validation Alerts
+// Accurate Battery Model Validation
 function validateInputs() {
     const alertBox = document.getElementById('formValidationAlert');
     const kmVal = Number(document.getElementById('km').value);
@@ -653,9 +698,12 @@ function validateInputs() {
     if (bEnd > 0 && bStart >= 0 && kwhVal > 0) {
         const diff = bEnd - bStart;
         if (diff > 0) {
-            const expectedKwh = diff * 0.52; // ~0.52 kWh per % pe Zoe
-            if (Math.abs(kwhVal - expectedKwh) > 10) {
-                msgs.push(`💡 Atenție: Pentru o diferență de ${diff}% baterie, ~${expectedKwh.toFixed(1)} kWh este valoarea uzuală.`);
+            const capUtil = cfg.capNominal * (cfg.soh / 100);
+            const batteryKwhEst = (diff / 100) * capUtil;
+            const plugKwhEst = batteryKwhEst / (1 - cfg.pierderi / 100);
+            
+            if (Math.abs(kwhVal - plugKwhEst) > 4) {
+                msgs.push(`💡 Conform profilului bateriei (${cfg.soh}% SOH, cap. utilă ${capUtil.toFixed(2)} kWh, pierderi ${cfg.pierderi}%): pentru +${diff}% în baterie (${batteryKwhEst.toFixed(2)} kWh), consumul din priză este de ~${plugKwhEst.toFixed(2)} kWh.`);
             }
         }
     }
@@ -672,7 +720,7 @@ function validateInputs() {
     document.getElementById(id).addEventListener('input', validateInputs);
 });
 
-// Quick Add Button
+// Quick Add
 document.getElementById('quickAddBtn').addEventListener('click', () => {
     if (processedLogs.length === 0) return toast('Nu există încărcări anterioare.');
     const last = processedLogs[processedLogs.length - 1];
@@ -684,7 +732,7 @@ document.getElementById('quickAddBtn').addEventListener('click', () => {
     toast('⚡ Date pre-completate din ultima ședință!');
 });
 
-// Submit Form (Add or Edit)
+// Form Submit
 document.getElementById('chargeForm').addEventListener('submit', async function(e) {
     e.preventDefault();
     const submitBtn = document.getElementById('submitBtn');
@@ -698,6 +746,9 @@ document.getElementById('chargeForm').addEventListener('submit', async function(
         batteryStart:   Number(document.getElementById('batteryStart').value),
         batteryEnd:     Number(document.getElementById('batteryEnd').value),
         kwh:            Number(document.getElementById('kwh').value),
+        temp:           document.getElementById('temp').value !== '' ? Number(document.getElementById('temp').value) : null,
+        driveType:      document.getElementById('driveType').value,
+        climate:        document.getElementById('climate').value,
         isSubscription: isSub,
         manualCost:     isSub ? 0 : (Number(document.getElementById('cost').value) || 0),
         createdAt:      firebase.firestore.FieldValue.serverTimestamp(),
@@ -742,7 +793,7 @@ collectionRef.onSnapshot(snapshot => {
     renderApp(logs);
 }, err => toast('❌ Eroare citire: ' + err.message, null, 6000));
 
-// Table Click Actions (Edit & Undo Delete)
+// Actions
 document.getElementById('logsBody').addEventListener('click', function(e) {
     const editBtn = e.target.closest('.btn-edit');
     const deleteBtn = e.target.closest('.btn-delete');
@@ -758,6 +809,9 @@ document.getElementById('logsBody').addEventListener('click', function(e) {
         document.getElementById('batteryStart').value = log.batteryStart;
         document.getElementById('batteryEnd').value = log.batteryEnd;
         document.getElementById('kwh').value = log.kwh;
+        document.getElementById('temp').value = log.temp !== undefined && log.temp !== null ? log.temp : '';
+        document.getElementById('driveType').value = log.driveType || 'Mixt';
+        document.getElementById('climate').value = log.climate || 'Oprit';
         document.getElementById('useSubscription').value = log.isSubscription ? 'true' : 'false';
         document.getElementById('customCostContainer').style.display = log.isSubscription ? 'none' : 'block';
         document.getElementById('cost').value = log.manualCost || 0;
@@ -817,7 +871,7 @@ function renderApp(logs) {
     const tbody = document.getElementById('logsBody');
     tbody.innerHTML = '';
 
-    let totalKwh = 0;
+    let totalPlugKwh = 0;
     const chartLabels = [], chartKwhData = [], chartRonData = [];
     const cycleTracker = {};
     const activeCycles = new Set();
@@ -826,7 +880,7 @@ function renderApp(logs) {
     let summerKwh = 0, summerKm = 0;
 
     const computed = logs.map(log => {
-        totalKwh += Number(log.kwh);
+        totalPlugKwh += Number(log.kwh);
         const ck = getCycleKey(log.date);
         let sessionCost = 0;
         if (log.isSubscription) {
@@ -845,17 +899,23 @@ function renderApp(logs) {
 
     processedLogs = computed;
 
-    // Detectare minim/maxim consum
+    // Calcul Capacitate Utilă Baterie
+    const capUtil = cfg.capNominal * (cfg.soh / 100);
+    const totalBatteryKwhEst = totalPlugKwh * (1 - cfg.pierderi / 100);
+
+    // Dynamic Efficiency & Moving Averages
     let minKwh100 = Infinity, maxKwh100 = -Infinity;
+    let validKwhList = [];
+
     computed.forEach((log, i) => {
         if (i > 0) {
             const dist = log.km - computed[i - 1].km;
             if (dist > 0) {
                 const k100 = (log.kwh / dist) * 100;
+                validKwhList.push(k100);
                 if (k100 < minKwh100) minKwh100 = k100;
                 if (k100 > maxKwh100) maxKwh100 = k100;
 
-                // Sezoane: Iarnă (11, 12, 1, 2, 3) vs Vară (4-10)
                 const month = new Date(log.date).getMonth() + 1;
                 if ([11, 12, 1, 2, 3].includes(month)) {
                     winterKwh += log.kwh; winterKm += dist;
@@ -865,6 +925,13 @@ function renderApp(logs) {
             }
         }
     });
+
+    // Medii Mobile M3 si M5
+    const last3 = validKwhList.slice(-3);
+    const last5 = validKwhList.slice(-5);
+    const m3Val = last3.length > 0 ? (last3.reduce((a, b) => a + b, 0) / last3.length).toFixed(1) : '—';
+    const m5Val = last5.length > 0 ? (last5.reduce((a, b) => a + b, 0) / last5.length).toFixed(1) : '—';
+    document.getElementById('statMovingAvgs').textContent = `M3: ${m3Val} | M5: ${m5Val} kWh/100km`;
 
     computed.forEach((log, i) => {
         const row = document.createElement('tr');
@@ -887,11 +954,17 @@ function renderApp(logs) {
             }
         }
 
+        const estBatEnergy = (log.kwh * (1 - cfg.pierderi / 100)).toFixed(1);
+        const condTemp = log.temp !== undefined && log.temp !== null ? `${log.temp}°C` : '—';
+        const condRoute = log.driveType || 'Mixt';
+        const condClim = log.climate || 'Oprit';
+
         row.innerHTML = `
             <td>${dateStr}</td>
             <td>${log.km.toLocaleString('ro-RO')}</td>
             <td>${log.batteryStart}% → ${log.batteryEnd}%</td>
-            <td><strong>${log.kwh}</strong></td>
+            <td><strong>${log.kwh}</strong> <span style="font-size:11px; color:var(--text-muted)">(${estBatEnergy} bat)</span></td>
+            <td><span style="font-size:12px;">🌡️ ${condTemp} | 🛣️ ${condRoute} | ❄️ ${condClim}</span></td>
             <td>${log.computedCost.toFixed(2)} RON</td>
             <td>${kwhBadge(kwhPer100)}</td>
             <td>${ronPer100 !== null ? `<span style="color:var(--text-muted)">${ronPer100.toFixed(2)}</span>` : '<span style="color:var(--text-muted)">—</span>'}</td>
@@ -907,7 +980,32 @@ function renderApp(logs) {
     const grandTotalCost  = (activeCycles.size * cfg.costAbo) + totalExtraCosts;
 
     document.getElementById('statTotalCost').textContent = grandTotalCost.toFixed(2) + ' RON';
-    document.getElementById('statTotalKwh').textContent  = totalKwh.toFixed(2) + ' kWh';
+    document.getElementById('statTotalKwh').textContent  = totalPlugKwh.toFixed(2) + ' kWh';
+    document.getElementById('statBatteryVsPlug').textContent = `Priză: ${totalPlugKwh.toFixed(1)} kWh | În baterie: ~${totalBatteryKwhEst.toFixed(1)} kWh`;
+
+    // General Averages & Health
+    let avgConsumption = 15.0, totalDistAll = 0;
+    let currentOdometer = computed.length > 0 ? computed[computed.length - 1].km : 0;
+
+    if (computed.length > 1) {
+        totalDistAll = computed[computed.length - 1].km - computed[0].km;
+        if (totalDistAll > 0) {
+            const sumKwh = computed.slice(1).reduce((a, l) => a + Number(l.kwh), 0);
+            avgConsumption = (sumKwh / totalDistAll) * 100;
+        }
+    }
+
+    // Cost Real Efectiv vs. Proiectat
+    const realCostPer100 = totalDistAll > 0 ? (grandTotalCost / totalDistAll) * 100 : 0;
+    document.getElementById('statAvgCostReal').textContent = realCostPer100 > 0 ? `${realCostPer100.toFixed(2)} RON/100km` : '— RON/100km';
+
+    // Autonomie Calculată
+    const range100 = (capUtil / avgConsumption) * 100;
+    const range80 = (range100 * 0.8);
+    const range20to80 = (range100 * 0.6);
+
+    document.getElementById('statHealthOverview').textContent = `SOH: ${cfg.soh}% | Cap. Utilă: ${capUtil.toFixed(2)} kWh | Km Actuali: ${currentOdometer.toLocaleString('ro-RO')} km`;
+    document.getElementById('statRangeOverview').textContent = `Autonomie est. (100%): ~${range100.toFixed(0)} km | (80%): ~${range80.toFixed(0)} km | Utilizabil (20% → 80%): ~${range20to80.toFixed(0)} km`;
 
     // Proiecție an curent
     const yearProjection = activeCycles.size > 0 ? (grandTotalCost / activeCycles.size) * 12 : grandTotalCost;
@@ -926,7 +1024,6 @@ function renderApp(logs) {
     document.getElementById('statCurrentCycleKwh').textContent =
         `${currentCycleKwh.toFixed(2)} / ${cfg.kwhIncluse} kWh (${pct.toFixed(1)}%)`;
     
-    // Alerte Cota 80% si 100%
     const bar = document.getElementById('cycleProgressBar');
     const cycleCard = document.getElementById('cycleCard');
     bar.style.width = pct + '%';
@@ -942,7 +1039,6 @@ function renderApp(logs) {
         cycleCard.style.borderLeftColor = 'var(--accent)';
     }
 
-    // Comparație ciclu trecut
     const cycleKeysArray = Array.from(activeCycles);
     if (cycleKeysArray.length > 1) {
         const prevKey = cycleKeysArray[cycleKeysArray.length - 2];
@@ -964,15 +1060,6 @@ function renderApp(logs) {
     const msDay         = 86400000;
     const daysElapsed   = Math.max(0.1, (now - cycleStart) / msDay);
     const daysRemaining = Math.max(0, (cycleEnd - now) / msDay);
-
-    let avgConsumption = 14.09, totalDistAll = 0;
-    if (computed.length > 1) {
-        totalDistAll = computed[computed.length - 1].km - computed[0].km;
-        if (totalDistAll > 0) {
-            const sumKwh = computed.slice(1).reduce((a, l) => a + Number(l.kwh), 0);
-            avgConsumption = (sumKwh / totalDistAll) * 100;
-        }
-    }
 
     const cycleLogs = computed.filter(l => l.cycleKey === currentCycleKey);
     let kmInCycle = 0;
@@ -1003,7 +1090,7 @@ function renderApp(logs) {
     if (totalDistAll > 0) {
         const projTotalKm = (kmInCycle > 0 ? kmInCycle : totalDistAll) + projKm;
         document.getElementById('statAvgKwh').textContent  = avgConsumption.toFixed(2) + ' kWh/100km';
-        document.getElementById('statAvgCost').textContent = '~' + ((grandTotalCost / projTotalKm) * 100).toFixed(2) + ' RON/100km';
+        document.getElementById('statAvgCostProj').textContent = 'Proiectat: ~' + ((grandTotalCost / projTotalKm) * 100).toFixed(2) + ' RON/100km';
 
         const costQ = (totalDistAll / 100) * cfg.consumQ * cfg.pretLitru;
         const costF = (totalDistAll / 100) * cfg.consumF * cfg.pretLitru;
@@ -1029,7 +1116,7 @@ function renderApp(logs) {
         }
     } else {
         document.getElementById('statAvgKwh').textContent = '— kWh/100km';
-        document.getElementById('statAvgCost').textContent = '— RON/100km';
+        document.getElementById('statAvgCostProj').textContent = 'Proiectat: ~— RON/100km';
         document.getElementById('statEconomyQashqai').textContent = 'Vom calcula după prima cursă.';
         document.getElementById('statEconomyFord').textContent = '';
     }
@@ -1093,9 +1180,9 @@ function renderChart(labels, data) {
 // CSV Export
 document.getElementById('exportCsvBtn').addEventListener('click', function() {
     if (!processedLogs.length) return toast('Nu există date de exportat.');
-    let csv = '\uFEFFData,Km,Baterie Start (%),Baterie Final (%),kWh,Tip,Cost Calculat (RON)\n';
+    let csv = '\uFEFFData,Km,Baterie Start (%),Baterie Final (%),kWh Priză,Temp (°C),Traseu,Climatizare,Tip,Cost Calculat (RON)\n';
     processedLogs.forEach(log => {
-        csv += `"${log.date}","${log.km}","${log.batteryStart}","${log.batteryEnd}","${log.kwh}","${log.isSubscription ? 'Abonament' : 'Direct'}","${log.computedCost.toFixed(2)}"\n`;
+        csv += `"${log.date}","${log.km}","${log.batteryStart}","${log.batteryEnd}","${log.kwh}","${log.temp !== undefined ? log.temp : ''}","${log.driveType || ''}","${log.climate || ''}","${log.isSubscription ? 'Abonament' : 'Direct'}","${log.computedCost.toFixed(2)}"\n`;
     });
     const a = Object.assign(document.createElement('a'), {
         href: URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' })),
@@ -1107,7 +1194,7 @@ document.getElementById('exportCsvBtn').addEventListener('click', function() {
     toast('⬇ CSV descărcat!');
 });
 
-// PDF Export (Print View)
+// PDF Export
 document.getElementById('exportPdfBtn').addEventListener('click', function() {
     window.print();
 });
