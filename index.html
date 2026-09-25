@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Jurnal Încărcare Zoe Pro - Battery & Health Edition</title>
+    <title>Jurnal Încărcare Zoe Pro - Fixed Edition</title>
 
     <!-- PWA Support via Data URIs -->
     <link rel="manifest" href='data:application/json,{"name":"Jurnal Zoe Pro","short_name":"ZoePro","start_url":".","display":"standalone","background_color":"#0f1117","theme_color":"#00b894","icons":[{"src":"https://cdn-icons-png.flaticon.com/512/3202/3202052.png","sizes":"512x512","type":"image/png"}]}'>
@@ -264,7 +264,7 @@
         .kwh-mid   { background: rgba(221,107,32,0.15); color: var(--warn); }
         .kwh-bad   { background: rgba(229,62,62,0.15);  color: var(--danger); }
 
-        .chart-wrap { position: relative; height: 260px; }
+        .chart-wrap { position: relative; height: 260px; width: 100%; }
 
         #toast {
             position: fixed;
@@ -313,7 +313,7 @@
 <body>
 
 <header class="app-header">
-    <h1>⚡ Jurnal Zoe <span class="badge">Pro v4 - Battery Profile</span></h1>
+    <h1>⚡ Jurnal Zoe <span class="badge">Pro v4.1 - Fixed</span></h1>
     <div class="header-actions">
         <button class="btn btn-quick" id="quickAddBtn" title="Pre-completează din ultima încărcare">⚡ Adaugă rapid</button>
         <button class="btn btn-theme" id="themeToggle" title="Schimbă tema">🌙</button>
@@ -568,6 +568,30 @@ if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register(URL.createObjectURL(blob)).catch(() => {});
 }
 
+// FUNCȚIE ROBUSTĂ DE PARSARE A DATELOR (FIX PENTRU NaN / INVALID DATE)
+function parseDate(dateVal) {
+    if (!dateVal) return new Date();
+    if (dateVal instanceof Date) return dateVal;
+    if (typeof dateVal === 'object' && dateVal.toDate) return dateVal.toDate();
+    
+    // Încearcă parsarea ISO standard (ex: 2026-09-25T14:26)
+    let d = new Date(dateVal);
+    if (!isNaN(d.getTime())) return d;
+
+    // Parsare format românesc (ex: 25.09.2026 14:26 sau 25/09/2026, 14:26)
+    const match = String(dateVal).match(/(\d{1,2})[\.\/](\d{1,2})[\.\/](\d{4})[\s,]+(\d{1,2}):(\d{2})/);
+    if (match) {
+        return new Date(
+            parseInt(match[3], 10),
+            parseInt(match[2], 10) - 1,
+            parseInt(match[1], 10),
+            parseInt(match[4], 10),
+            parseInt(match[5], 10)
+        );
+    }
+    return new Date();
+}
+
 const CFG_KEY = 'zoe_config';
 let cfg = {
     capNominal: 22, soh: 88, pierderi: 10,
@@ -679,7 +703,6 @@ document.getElementById('useSubscription').addEventListener('change', function()
         this.value === 'false' ? 'block' : 'none';
 });
 
-// Accurate Battery Model Validation
 function validateInputs() {
     const alertBox = document.getElementById('formValidationAlert');
     const kmVal = Number(document.getElementById('km').value);
@@ -720,7 +743,6 @@ function validateInputs() {
     document.getElementById(id).addEventListener('input', validateInputs);
 });
 
-// Quick Add
 document.getElementById('quickAddBtn').addEventListener('click', () => {
     if (processedLogs.length === 0) return toast('Nu există încărcări anterioare.');
     const last = processedLogs[processedLogs.length - 1];
@@ -732,7 +754,6 @@ document.getElementById('quickAddBtn').addEventListener('click', () => {
     toast('⚡ Date pre-completate din ultima ședință!');
 });
 
-// Form Submit
 document.getElementById('chargeForm').addEventListener('submit', async function(e) {
     e.preventDefault();
     const submitBtn = document.getElementById('submitBtn');
@@ -788,12 +809,13 @@ document.getElementById('cancelEditBtn').addEventListener('click', resetEditMode
 collectionRef.onSnapshot(snapshot => {
     const logs = [];
     snapshot.forEach(doc => logs.push({ id: doc.id, ...doc.data() }));
-    logs.sort((a, b) => new Date(a.date) - new Date(b.date));
+    
+    // Sortare sigură cu parseDate
+    logs.sort((a, b) => parseDate(a.date) - parseDate(b.date));
     currentLogs = logs;
     renderApp(logs);
 }, err => toast('❌ Eroare citire: ' + err.message, null, 6000));
 
-// Actions
 document.getElementById('logsBody').addEventListener('click', function(e) {
     const editBtn = e.target.closest('.btn-edit');
     const deleteBtn = e.target.closest('.btn-delete');
@@ -851,7 +873,7 @@ document.getElementById('logsBody').addEventListener('click', function(e) {
 });
 
 function getCycleKey(dateStr) {
-    const d = new Date(dateStr);
+    const d = parseDate(dateStr);
     let y = d.getFullYear(), m = d.getMonth();
     if (d.getDate() < cfg.ziStart) {
         m -= 1;
@@ -889,6 +911,8 @@ function renderApp(logs) {
             const next = prev + Number(log.kwh);
             if (next > cfg.kwhIncluse) {
                 sessionCost = Math.min(Number(log.kwh), next - cfg.kwhIncluse) * cfg.tarifDep;
+            } else {
+                sessionCost = 0;
             }
             cycleTracker[ck] = next;
         } else {
@@ -899,11 +923,9 @@ function renderApp(logs) {
 
     processedLogs = computed;
 
-    // Calcul Capacitate Utilă Baterie
     const capUtil = cfg.capNominal * (cfg.soh / 100);
     const totalBatteryKwhEst = totalPlugKwh * (1 - cfg.pierderi / 100);
 
-    // Dynamic Efficiency & Moving Averages
     let minKwh100 = Infinity, maxKwh100 = -Infinity;
     let validKwhList = [];
 
@@ -916,7 +938,7 @@ function renderApp(logs) {
                 if (k100 < minKwh100) minKwh100 = k100;
                 if (k100 > maxKwh100) maxKwh100 = k100;
 
-                const month = new Date(log.date).getMonth() + 1;
+                const month = parseDate(log.date).getMonth() + 1;
                 if ([11, 12, 1, 2, 3].includes(month)) {
                     winterKwh += log.kwh; winterKm += dist;
                 } else {
@@ -926,7 +948,6 @@ function renderApp(logs) {
         }
     });
 
-    // Medii Mobile M3 si M5
     const last3 = validKwhList.slice(-3);
     const last5 = validKwhList.slice(-5);
     const m3Val = last3.length > 0 ? (last3.reduce((a, b) => a + b, 0) / last3.length).toFixed(1) : '—';
@@ -935,7 +956,7 @@ function renderApp(logs) {
 
     computed.forEach((log, i) => {
         const row = document.createElement('tr');
-        const d = new Date(log.date);
+        const d = parseDate(log.date);
         const dateStr = d.toLocaleDateString('ro-RO') + ' ' +
                         d.toLocaleTimeString('ro-RO', { hour: '2-digit', minute: '2-digit' });
 
@@ -983,7 +1004,6 @@ function renderApp(logs) {
     document.getElementById('statTotalKwh').textContent  = totalPlugKwh.toFixed(2) + ' kWh';
     document.getElementById('statBatteryVsPlug').textContent = `Priză: ${totalPlugKwh.toFixed(1)} kWh | În baterie: ~${totalBatteryKwhEst.toFixed(1)} kWh`;
 
-    // General Averages & Health
     let avgConsumption = 15.0, totalDistAll = 0;
     let currentOdometer = computed.length > 0 ? computed[computed.length - 1].km : 0;
 
@@ -995,11 +1015,9 @@ function renderApp(logs) {
         }
     }
 
-    // Cost Real Efectiv vs. Proiectat
     const realCostPer100 = totalDistAll > 0 ? (grandTotalCost / totalDistAll) * 100 : 0;
     document.getElementById('statAvgCostReal').textContent = realCostPer100 > 0 ? `${realCostPer100.toFixed(2)} RON/100km` : '— RON/100km';
 
-    // Autonomie Calculată
     const range100 = (capUtil / avgConsumption) * 100;
     const range80 = (range100 * 0.8);
     const range20to80 = (range100 * 0.6);
@@ -1007,11 +1025,9 @@ function renderApp(logs) {
     document.getElementById('statHealthOverview').textContent = `SOH: ${cfg.soh}% | Cap. Utilă: ${capUtil.toFixed(2)} kWh | Km Actuali: ${currentOdometer.toLocaleString('ro-RO')} km`;
     document.getElementById('statRangeOverview').textContent = `Autonomie est. (100%): ~${range100.toFixed(0)} km | (80%): ~${range80.toFixed(0)} km | Utilizabil (20% → 80%): ~${range20to80.toFixed(0)} km`;
 
-    // Proiecție an curent
     const yearProjection = activeCycles.size > 0 ? (grandTotalCost / activeCycles.size) * 12 : grandTotalCost;
     document.getElementById('statYearProjection').textContent = `Proiecție an: ~${yearProjection.toFixed(0)} RON`;
 
-    // Statistici sezoane
     const avgWinter = winterKm > 0 ? ((winterKwh / winterKm) * 100).toFixed(1) : '—';
     const avgSummer = summerKm > 0 ? ((summerKwh / summerKm) * 100).toFixed(1) : '—';
     document.getElementById('statSeasons').textContent = `❄️ Iarnă: ${avgWinter} | ☀️ Vară: ${avgSummer} kWh/100km`;
@@ -1124,7 +1140,6 @@ function renderApp(logs) {
     renderChart(chartLabels, activeChartMetric === 'kwh' ? chartKwhData : chartRonData);
 }
 
-// Dual Chart Switching
 document.getElementById('tabKwhBtn').addEventListener('click', function() {
     activeChartMetric = 'kwh';
     this.classList.add('active');
@@ -1142,6 +1157,9 @@ document.getElementById('tabRonBtn').addEventListener('click', function() {
 function renderChart(labels, data) {
     const ctx = document.getElementById('consumptionChart').getContext('2d');
     if (chartInstance) chartInstance.destroy();
+    
+    if (!labels || labels.length === 0) return;
+
     const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
     const gridColor  = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)';
     const labelColor = '#718096';
@@ -1151,10 +1169,10 @@ function renderChart(labels, data) {
     chartInstance = new Chart(ctx, {
         type: 'line',
         data: {
-            labels,
+            labels: labels,
             datasets: [{
                 label: metricLabel,
-                data,
+                data: data,
                 borderColor: metricColor,
                 backgroundColor: activeChartMetric === 'kwh' ? 'rgba(0,184,148,0.08)' : 'rgba(128,90,213,0.08)',
                 borderWidth: 2,
@@ -1177,7 +1195,6 @@ function renderChart(labels, data) {
     });
 }
 
-// CSV Export
 document.getElementById('exportCsvBtn').addEventListener('click', function() {
     if (!processedLogs.length) return toast('Nu există date de exportat.');
     let csv = '\uFEFFData,Km,Baterie Start (%),Baterie Final (%),kWh Priză,Temp (°C),Traseu,Climatizare,Tip,Cost Calculat (RON)\n';
@@ -1194,7 +1211,6 @@ document.getElementById('exportCsvBtn').addEventListener('click', function() {
     toast('⬇ CSV descărcat!');
 });
 
-// PDF Export
 document.getElementById('exportPdfBtn').addEventListener('click', function() {
     window.print();
 });
