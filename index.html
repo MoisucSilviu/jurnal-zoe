@@ -8,7 +8,7 @@
     <!-- Favicon SVG Inline -->
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚡</text></svg>">
 
-    <!-- PWA Support -->
+    <!-- PWA Support via Encoded Data URI -->
     <link rel="manifest" href="data:application/json,%7B%22name%22%3A%22Jurnal%20Zoe%20Pro%22%2C%22short_name%22%3A%22ZoePro%22%2C%22start_url%22%3A%22.%22%2C%22display%22%3A%22standalone%22%2C%22background_color%22%3A%22%230f1117%22%2C%22theme_color%22%3A%22%2300b894%22%7D">
     <meta name="theme-color" content="#00b894">
 
@@ -316,7 +316,7 @@
 <body>
 
 <header class="app-header">
-    <h1>⚡ Jurnal Zoe <span class="badge">Pro v5.1 - Cloud Sync</span></h1>
+    <h1>⚡ Jurnal Zoe <span class="badge">Pro v5.2 - 23.3 kWh</span></h1>
     <div class="header-actions">
         <button class="btn btn-quick" id="quickAddBtn" title="Pre-completează din ultima încărcare">⚡ Rapid</button>
         <button class="btn btn-theme" id="themeToggle" title="Schimbă tema">🌙</button>
@@ -330,8 +330,8 @@
     <div class="stats-grid">
         <div class="stat-card full" style="border-left-color: var(--accent); background-color: var(--surface-alt);">
             <h3>🔋 Profil Baterie & Health Dashboard</h3>
-            <p id="statHealthOverview">SOH: 88% | Cap. Utilă: 19.36 kWh | Km Actuali: —</p>
-            <p class="sub" id="statRangeOverview">Autonomie est. (100%): ~129 km | (80%): ~103 km | Utilizabil (20% → 80%): ~77 km</p>
+            <p id="statHealthOverview">SOH: 88% | Cap. Utilă: 20.50 kWh | Km Actuali: —</p>
+            <p class="sub" id="statRangeOverview">Autonomie est. (100%): ~136 km | (80%): ~109 km | Utilizabil (20% → 80%): ~82 km</p>
         </div>
     </div>
 
@@ -405,7 +405,7 @@
             <div class="settings-grid">
                 <div class="form-group">
                     <label>Capacitate Nominală Baterie (kWh)</label>
-                    <input type="number" id="cfgCapNominal" value="22" step="0.1">
+                    <input type="number" id="cfgCapNominal" value="23.3" step="0.1">
                 </div>
                 <div class="form-group">
                     <label>SOH Baterie (%)</label>
@@ -581,7 +581,7 @@
 </div>
 
 <script>
-// Helper-e de securitate DOM
+// Manipulare sigură a elementelor DOM
 function setTxt(id, val) {
     const el = document.getElementById(id);
     if (el) el.textContent = val;
@@ -630,10 +630,19 @@ function parseDate(dateVal) {
     return new Date();
 }
 
+// Baza utilă de 23.3 kWh
 let cfg = {
-    capNominal: 22, soh: 88, pierderi: 10,
-    costAbo: 200, kwhIncluse: 120, tarifDep: 2.0, ziStart: 14,
-    pretLitru: 7.2, dailyKm: 35, consumQ: 7.4, consumF: 10.5
+    capNominal: 23.3, 
+    soh: 88, 
+    pierderi: 10,
+    costAbo: 200, 
+    kwhIncluse: 120, 
+    tarifDep: 2.0, 
+    ziStart: 14,
+    pretLitru: 7.2, 
+    dailyKm: 35, 
+    consumQ: 7.4, 
+    consumF: 10.5
 };
 
 const firebaseConfig = {
@@ -649,7 +658,7 @@ const db = firebase.firestore();
 const collectionRef = db.collection('incarcari_zoe');
 const configDocRef = db.collection('config_zoe').doc('main');
 
-// Sincronizare Cloud Firestore a setărilor în timp real pe toate dispozitivele
+// Sincronizare Cloud Firestore pe toate dispozitivele
 configDocRef.onSnapshot(doc => {
     if (doc.exists) {
         cfg = { ...cfg, ...doc.data() };
@@ -1015,6 +1024,7 @@ function renderApp(logs) {
 
     processedLogs = computed;
 
+    // Recalculare capacitate utilă cu baza de 23.3 kWh
     const capUtil = cfg.capNominal * (cfg.soh / 100);
     const totalBatteryKwhEst = totalPlugKwh * (1 - cfg.pierderi / 100);
 
@@ -1046,7 +1056,6 @@ function renderApp(logs) {
     const m5Val = last5.length > 0 ? (last5.reduce((a, b) => a + b, 0) / last5.length).toFixed(1) : '—';
     setTxt('statMovingAvgs', `M3: ${m3Val} | M5: ${m5Val} kWh/100km`);
 
-    // Calculează Trend Consum (ultimele 3 vs anterioarele)
     if (validKwhList.length >= 4) {
         const recent3 = validKwhList.slice(-3);
         const previous3 = validKwhList.slice(-6, -3);
@@ -1210,7 +1219,6 @@ function renderApp(logs) {
         setStyleBorderLeftColor('estimationCard', 'var(--danger)');
     }
 
-    // CALCULUL CORECT DE AMORTIZARE BAZAT PE KILOMETRI REALI
     if (totalDistAll > 0) {
         const projTotalKm = (kmInCycle > 0 ? kmInCycle : totalDistAll) + projKm;
         setTxt('statAvgKwh', avgConsumption.toFixed(2) + ' kWh/100km');
