@@ -366,7 +366,7 @@
 <body>
 
 <header class="app-header">
-    <h1>⚡ Jurnal Zoe <span class="badge">Pro v6.0</span></h1>
+    <h1>⚡ Jurnal Zoe <span class="badge">Pro v6.1 - Fixed</span></h1>
     <div class="header-actions">
         <button class="btn btn-quick" id="quickAddBtn" title="Pre-completează din ultima încărcare">⚡ Rapid</button>
         <button class="btn btn-theme" id="themeToggle" title="Schimbă tema">🌙</button>
@@ -729,7 +729,7 @@
 </div>
 
 <script>
-// Helper-e de securitate DOM pentru prevenirea erorilor
+// Helper-e de securitate DOM
 function setTxt(id, val) {
     const el = document.getElementById(id);
     if (el) el.textContent = val;
@@ -737,6 +737,26 @@ function setTxt(id, val) {
 function setStyleColor(id, color) {
     const el = document.getElementById(id);
     if (el) el.style.color = color;
+}
+function setStyleWidth(id, width) {
+    const el = document.getElementById(id);
+    if (el) el.style.width = width;
+}
+function setStyleBackground(id, bg) {
+    const el = document.getElementById(id);
+    if (el) el.style.background = bg;
+}
+function setStyleBorderLeftColor(id, color) {
+    const el = document.getElementById(id);
+    if (el) el.style.borderLeftColor = color;
+}
+
+// Funcție globală de generare a badge-urilor de consum
+function kwhBadge(val) {
+    if (val === null || val === undefined || isNaN(val)) return '<span style="color:var(--text-muted)">—</span>';
+    const v = Number(val);
+    const cls = v < 15 ? 'kwh-good' : v < 17 ? 'kwh-mid' : 'kwh-bad';
+    return `<span class="kwh-badge ${cls}">${v.toFixed(2)}</span>`;
 }
 
 if ('serviceWorker' in navigator) {
@@ -766,6 +786,7 @@ function parseDate(dateVal) {
     return new Date();
 }
 
+// Baza utilă de 23.3 kWh
 let cfg = {
     capNominal: 23.3, 
     soh: 88, 
