@@ -609,6 +609,11 @@
                 <p id="statCostExternalTotal">0.00 RON</p>
                 <p class="sub" id="statKwhExternalTotal">0.0 kWh tot timpul</p>
             </div>
+            <div class="stat-card" style="border-left-color: var(--warn)">
+                <h3>Abonament istoric</h3>
+                <p id="statCostSubscriptionTotal">0.00 RON</p>
+                <p class="sub" id="statKwhSubscriptionTotal">0.0 kWh din abonament</p>
+            </div>
             <div class="stat-card" style="border-left-color: var(--info)">
                 <h3>Preț Mediu Real/kWh</h3>
                 <p id="statAvgPricePerKwh">0.00 RON</p>
@@ -834,6 +839,8 @@ document.querySelectorAll('.nav-tab').forEach(btn => {
 configDocRef.onSnapshot(doc => {
     if (doc.exists) {
         cfg = { ...cfg, ...doc.data() };
+        // O valoare goală veche nu trebuie să reactiveze abonamentul.
+        if (!cfg.abonamentPanaLa) cfg.abonamentPanaLa = '2026-09-30';
         syncCfgToInputs();
         if (currentLogs.length > 0) renderApp(currentLogs);
     }
@@ -1031,15 +1038,16 @@ function renderApp(logs) {
     const activeCycles = new Set();
 
     processedLogs = logs.map(log => {
-        const d = parseDate(log.date);
-        const cycleKey = `${d.getFullYear()}-${d.getMonth() + 1}`;
         const chargeType = log.chargeType || (log.isSubscription ? 'subscription' : 'external');
+        const cycleKey = getSubscriptionCycleKey(log.date);
         let sessionCost = 0;
+        let subscriptionBaseCost = 0;
         
         if (chargeType === 'subscription' && (!cfg.abonamentPanaLa || log.date.slice(0, 10) <= cfg.abonamentPanaLa)) {
             activeCycles.add(cycleKey);
             const prev = cycleTracker[cycleKey] || 0;
             const next = prev + Number(log.kwh);
+            if (prev === 0) subscriptionBaseCost = Number(cfg.costAbo) || 0;
             if (next > cfg.kwhIncluse) {
                 sessionCost = Math.min(Number(log.kwh), next - cfg.kwhIncluse) * cfg.tarifDep;
             }
@@ -1049,13 +1057,24 @@ function renderApp(logs) {
         } else {
             sessionCost = Number(log.manualCost) || 0;
         }
-        return { ...log, chargeType, computedCost: sessionCost, cycleKey };
+        return { ...log, chargeType, computedCost: sessionCost + subscriptionBaseCost, cycleKey };
     });
 
     populateMonthFilterOptions(processedLogs);
     renderGeneralStats(processedLogs, activeCycles);
     renderTableAndStats();
     renderMonthlyAggregates();
+}
+
+function getSubscriptionCycleKey(dateVal) {
+    const d = parseDate(dateVal);
+    let year = d.getFullYear();
+    let month = d.getMonth();
+    if (d.getDate() < Number(cfg.ziStart || 1)) {
+        month -= 1;
+        if (month < 0) { month = 11; year -= 1; }
+    }
+    return `${year}-${String(month + 1).padStart(2, '0')}`;
 }
 
 function populateMonthFilterOptions(logs) {
@@ -1085,7 +1104,8 @@ function populateMonthFilterOptions(logs) {
 
 function renderGeneralStats(logs, activeCycles) {
     let totalPlugKwh = 0, totalExtraCosts = 0;
-    let homeKwhAll = 0, externalKwhAll = 0, homeCostAll = 0, externalCostAll = 0;
+    let homeKwhAll = 0, externalKwhAll = 0, subscriptionKwhAll = 0;
+    let homeCostAll = 0, externalCostAll = 0, subscriptionCostAll = 0;
     let winterKwh = 0, winterKm = 0, summerKwh = 0, summerKm = 0;
     let validKwhList = [];
 
@@ -1099,6 +1119,9 @@ function renderGeneralStats(logs, activeCycles) {
         } else if (log.chargeType === 'external') {
             externalKwhAll += Number(log.kwh);
             externalCostAll += log.computedCost;
+        } else if (log.chargeType === 'subscription') {
+            subscriptionKwhAll += Number(log.kwh);
+            subscriptionCostAll += log.computedCost;
         }
 
         if (i > 0) {
@@ -1119,7 +1142,8 @@ function renderGeneralStats(logs, activeCycles) {
 
     const capUtil = cfg.capNominal * (cfg.soh / 100);
     const totalBatteryKwhEst = totalPlugKwh * (1 - cfg.pierderi / 100);
-    const grandTotalCost = (activeCycles.size * cfg.costAbo) + totalExtraCosts;
+    // computedCost conține deja costul fix al abonamentului o singură dată/ciclu.
+    const grandTotalCost = totalExtraCosts;
 
     setTxt('statTotalCost', grandTotalCost.toFixed(2) + ' RON');
     setTxt('statTotalKwh', totalPlugKwh.toFixed(2) + ' kWh');
@@ -1154,6 +1178,8 @@ function renderGeneralStats(logs, activeCycles) {
     setTxt('statKwhHomeTotal', `${homeKwhAll.toFixed(1)} kWh acasă`);
     setTxt('statCostExternalTotal', `${externalCostAll.toFixed(2)} RON`);
     setTxt('statKwhExternalTotal', `${externalKwhAll.toFixed(1)} kWh extern`);
+    setTxt('statCostSubscriptionTotal', `${subscriptionCostAll.toFixed(2)} RON`);
+    setTxt('statKwhSubscriptionTotal', `${subscriptionKwhAll.toFixed(1)} kWh din abonament`);
 
     const avgPricePerKwh = totalPlugKwh > 0 ? grandTotalCost / totalPlugKwh : 0;
     setTxt('statAvgPricePerKwh', `~${avgPricePerKwh.toFixed(2)} RON/kWh`);
@@ -1170,15 +1196,17 @@ function renderGeneralStats(logs, activeCycles) {
         return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}` === currentMonthKey;
     });
 
-    let currentMonthHomeKwh = 0, currentMonthTotalKwh = 0;
+    let currentMonthHomeKwh = 0, currentMonthExternalKwh = 0, currentMonthSubscriptionKwh = 0, currentMonthTotalKwh = 0;
     currentMonthLogs.forEach(l => {
         currentMonthTotalKwh += Number(l.kwh);
         if (l.chargeType === 'home') currentMonthHomeKwh += Number(l.kwh);
+        else if (l.chargeType === 'external') currentMonthExternalKwh += Number(l.kwh);
+        else currentMonthSubscriptionKwh += Number(l.kwh);
     });
 
     const homePctMonth = currentMonthTotalKwh > 0 ? (currentMonthHomeKwh / currentMonthTotalKwh) * 100 : 0;
     setTxt('statCurrentMonthHomePct', `În luna curentă ai încărcat ${homePctMonth.toFixed(1)}% acasă`);
-    setTxt('statCurrentMonthHomeSub', `${currentMonthHomeKwh.toFixed(1)} kWh acasă vs ${(currentMonthTotalKwh - currentMonthHomeKwh).toFixed(1)} kWh extern`);
+    setTxt('statCurrentMonthHomeSub', `${currentMonthHomeKwh.toFixed(1)} kWh acasă · ${currentMonthExternalKwh.toFixed(1)} kWh extern · ${currentMonthSubscriptionKwh.toFixed(1)} kWh abonament`);
 
     // Medii Mobile & Anotimpuri
     const last3 = validKwhList.slice(-3);
@@ -1314,8 +1342,11 @@ function renderMonthlyAggregates() {
                 dateObj: new Date(d.getFullYear(), d.getMonth(), 1),
                 kwhHome: 0,
                 kwhExternal: 0,
+                kwhSubscription: 0,
                 kwhTotal: 0,
                 costTotal: 0,
+                segmentKwh: 0,
+                segmentKm: 0,
                 logs: []
             };
         }
@@ -1325,7 +1356,20 @@ function renderMonthlyAggregates() {
         m.kwhTotal += Number(log.kwh);
         m.costTotal += log.computedCost;
         if (log.chargeType === 'home') m.kwhHome += Number(log.kwh);
-        else m.kwhExternal += Number(log.kwh);
+        else if (log.chargeType === 'external') m.kwhExternal += Number(log.kwh);
+        else m.kwhSubscription += Number(log.kwh);
+    });
+
+    // Fiecare încărcare (în afară de prima) este asociată segmentului parcurs
+    // de la încărcarea anterioară. Asta păstrează corecte lunile la granițe.
+    processedLogs.forEach((log, index) => {
+        if (index === 0) return;
+        const distance = Number(log.km) - Number(processedLogs[index - 1].km);
+        if (distance <= 0) return;
+        const d = parseDate(log.date);
+        const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+        monthlyMap[key].segmentKm += distance;
+        monthlyMap[key].segmentKwh += Number(log.kwh);
     });
 
     const sortedMonths = Object.values(monthlyMap).sort((a, b) => b.dateObj - a.dateObj);
@@ -1335,14 +1379,8 @@ function renderMonthlyAggregates() {
         const monthName = m.dateObj.toLocaleDateString('ro-RO', { month: 'long', year: 'numeric' });
         const formattedMonth = monthName.charAt(0).toUpperCase() + monthName.slice(1);
 
-        let distDriven = 0;
-        if (m.logs.length > 0) {
-            const firstKm = m.logs[0].km;
-            const lastKm = m.logs[m.logs.length - 1].km;
-            distDriven = lastKm - firstKm;
-        }
-
-        const avgKwh100 = distDriven > 0 ? ((m.kwhTotal / distDriven) * 100).toFixed(2) : '—';
+        const distDriven = m.segmentKm;
+        const avgKwh100 = distDriven > 0 ? ((m.segmentKwh / distDriven) * 100).toFixed(2) : '—';
         const avgRon100 = distDriven > 0 ? ((m.costTotal / distDriven) * 100).toFixed(2) : '—';
         const homePct = m.kwhTotal > 0 ? ((m.kwhHome / m.kwhTotal) * 100).toFixed(1) : '0.0';
 
@@ -1376,6 +1414,7 @@ function renderMonthlyBarChart(monthsArray = null) {
     const labels = reversed.map(m => m.dateObj.toLocaleDateString('ro-RO', { month: 'short', year: '2-digit' }));
     const homeKwhData = reversed.map(m => m.kwhHome.toFixed(1));
     const externalKwhData = reversed.map(m => m.kwhExternal.toFixed(1));
+    const subscriptionKwhData = reversed.map(m => m.kwhSubscription.toFixed(1));
     const costData = reversed.map(m => m.costTotal.toFixed(2));
 
     const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
@@ -1397,6 +1436,12 @@ function renderMonthlyBarChart(monthsArray = null) {
                     label: 'kWh Extern',
                     data: externalKwhData,
                     backgroundColor: '#805ad5',
+                    borderRadius: 4
+                },
+                {
+                    label: 'kWh Abonament',
+                    data: subscriptionKwhData,
+                    backgroundColor: '#dd6b20',
                     borderRadius: 4
                 },
                 {
