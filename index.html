@@ -1221,6 +1221,18 @@ function renderTableAndStats() {
     if (!tbody) return;
     tbody.innerHTML = '';
 
+    // Fallback local: tabelul poate fi rerandat imediat după salvarea setărilor.
+    // Astfel, nu depinde de o funcție globală care ar putea lipsi într-o versiune
+    // mai veche rămasă în cache-ul browserului.
+    const renderKwhBadge = (val) => {
+        if (val === null || val === undefined || Number.isNaN(Number(val))) {
+            return '<span style="color:var(--text-muted)">—</span>';
+        }
+        const v = Number(val);
+        const cls = v < 15 ? 'kwh-good' : v < 17 ? 'kwh-mid' : 'kwh-bad';
+        return `<span class="kwh-badge ${cls}">${v.toFixed(2)}</span>`;
+    };
+
     const selMonth = filterMonthSelect ? filterMonthSelect.value : 'all';
     const selSource = filterSourceSelect ? filterSourceSelect.value : 'all';
 
@@ -1271,7 +1283,7 @@ function renderTableAndStats() {
             <td>${badgeHtml}</td>
             <td><span style="font-size:12px;">🌡️ ${condTemp} | 🛣️ ${condRoute} | ❄️ ${condClim}</span></td>
             <td>${log.computedCost.toFixed(2)} RON</td>
-            <td>${kwhBadge(kwhPer100)}</td>
+            <td>${renderKwhBadge(kwhPer100)}</td>
             <td style="white-space:nowrap;">
                 <button class="btn-edit" data-id="${log.id}">✏️ Edit</button>
                 <button class="btn-delete" data-id="${log.id}">Șterge</button>
