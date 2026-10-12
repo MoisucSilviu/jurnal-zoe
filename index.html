@@ -366,7 +366,7 @@
 <body>
 
 <header class="app-header">
-    <h1>⚡ Jurnal Zoe <span class="badge">Pro v6.2 - Edit Fix</span></h1>
+    <h1>⚡ Jurnal Zoe <span class="badge">Pro v6.3 - Real Efficiency</span></h1>
     <div class="header-actions">
         <button class="btn btn-quick" id="quickAddBtn" title="Pre-completează din ultima încărcare">⚡ Rapid</button>
         <button class="btn btn-theme" id="themeToggle" title="Schimbă tema">🌙</button>
@@ -734,7 +734,7 @@
 </div>
 
 <script>
-// Helper-e de securitate DOM pentru prevenirea erorilor
+// Helper-e de securitate DOM
 function setTxt(id, val) {
     const el = document.getElementById(id);
     if (el) el.textContent = val;
@@ -997,17 +997,13 @@ collectionRef.onSnapshot(snapshot => {
     renderApp(logs);
 }, err => toast('❌ Eroare citire: ' + err.message, null, 6000));
 
-
-// =========================================================================
-// SOLUȚIA PROBLEMEI DE EDITARE/ȘTERGERE: REINTRODUCEREA EVENT LISTENER-ULUI
-// =========================================================================
+// Evenimentul pentru Editare și Ștergere din tabel
 const logsBodyEl = document.getElementById('logsBody');
 if (logsBodyEl) {
     logsBodyEl.addEventListener('click', function(e) {
         const editBtn = e.target.closest('.btn-edit');
         const deleteBtn = e.target.closest('.btn-delete');
 
-        // ==== LOGICA PENTRU EDITARE ====
         if (editBtn) {
             const id = editBtn.dataset.id;
             const log = processedLogs.find(l => l.id === id);
@@ -1042,15 +1038,12 @@ if (logsBodyEl) {
             const cancelBtn = document.getElementById('cancelEditBtn');
             if (cancelBtn) cancelBtn.style.display = 'inline-block';
             
-            // Auto-schimbăm pe tab-ul de încărcări dacă suntem în altă parte
             const incarcariTabBtn = document.querySelector('.nav-tab[data-tab="tab-incarcari"]');
             if (incarcariTabBtn) incarcariTabBtn.click();
             
-            // Ducem utilizatorul sus la formular
             window.scrollTo({ top: 0, behavior: 'smooth' });
         }
 
-        // ==== LOGICA PENTRU ȘTERGERE CU UNDO ====
         if (deleteBtn) {
             const id = deleteBtn.dataset.id;
             if (!id) return;
@@ -1079,8 +1072,6 @@ if (logsBodyEl) {
         }
     });
 }
-// =========================================================================
-
 
 // Elementele de filtrare
 const filterMonthSelect = document.getElementById('filterMonthSelect');
@@ -1094,6 +1085,17 @@ if (btnQuickFilterExternal) {
         if (filterSourceSelect) filterSourceSelect.value = 'external';
         renderTableAndStats();
     });
+}
+
+function getSubscriptionCycleKey(dateVal) {
+    const d = parseDate(dateVal);
+    let year = d.getFullYear();
+    let month = d.getMonth();
+    if (d.getDate() < Number(cfg.ziStart || 1)) {
+        month -= 1;
+        if (month < 0) { month = 11; year -= 1; }
+    }
+    return `${year}-${String(month + 1).padStart(2, '0')}`;
 }
 
 function renderApp(logs) {
@@ -1127,17 +1129,6 @@ function renderApp(logs) {
     renderGeneralStats(processedLogs, activeCycles);
     renderTableAndStats();
     renderMonthlyAggregates();
-}
-
-function getSubscriptionCycleKey(dateVal) {
-    const d = parseDate(dateVal);
-    let year = d.getFullYear();
-    let month = d.getMonth();
-    if (d.getDate() < Number(cfg.ziStart || 1)) {
-        month -= 1;
-        if (month < 0) { month = 11; year -= 1; }
-    }
-    return `${year}-${String(month + 1).padStart(2, '0')}`;
 }
 
 function populateMonthFilterOptions(logs) {
@@ -1188,10 +1179,23 @@ function renderGeneralStats(logs, activeCycles) {
         }
 
         if (i > 0) {
-            const dist = log.km - logs[i - 1].km;
+            const prevLog = logs[i - 1];
+            const dist = log.km - prevLog.km;
             if (dist > 0) {
-                const k100 = (log.kwh / dist) * 100;
-                validKwhList.push(k100);
+                const capUtil = cfg.capNominal * (cfg.soh / 100);
+                const socUsed = prevLog.batteryEnd - log.batteryStart;
+                let kwhPer100Segment = 0;
+                
+                // Calcul bazat pe diferența reală de SOC
+                if (socUsed > 0) {
+                    const kwhBat = (socUsed / 100) * capUtil;
+                    const kwhPlug = kwhBat / (1 - cfg.pierderi / 100);
+                    kwhPer100Segment = (kwhPlug / dist) * 100;
+                } else {
+                    kwhPer100Segment = (log.kwh / dist) * 100;
+                }
+
+                validKwhList.push(kwhPer100Segment);
 
                 const month = parseDate(log.date).getMonth() + 1;
                 if ([11, 12, 1, 2, 3].includes(month)) {
@@ -1343,9 +1347,21 @@ function renderTableAndStats() {
 
         let kwhPer100 = null, ronPer100 = null;
         if (origIndex > 0) {
-            const dist = log.km - processedLogs[origIndex - 1].km;
+            const prevLog = processedLogs[origIndex - 1];
+            const dist = log.km - prevLog.km;
             if (dist > 0) {
-                kwhPer100 = (log.kwh / dist) * 100;
+                const capUtil = cfg.capNominal * (cfg.soh / 100);
+                const socUsed = prevLog.batteryEnd - log.batteryStart;
+                
+                // Calcul bazat pe consumul real de energie din baterie
+                if (socUsed > 0) {
+                    const kwhBat = (socUsed / 100) * capUtil;
+                    const kwhPlug = kwhBat / (1 - cfg.pierderi / 100);
+                    kwhPer100 = (kwhPlug / dist) * 100;
+                } else {
+                    kwhPer100 = (log.kwh / dist) * 100;
+                }
+
                 ronPer100 = (log.computedCost / dist) * 100;
                 chartLabels.push(dateStr);
                 chartKwhData.push(kwhPer100.toFixed(2));
