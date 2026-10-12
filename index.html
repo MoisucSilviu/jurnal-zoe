@@ -366,7 +366,7 @@
 <body>
 
 <header class="app-header">
-    <h1>⚡ Jurnal Zoe <span class="badge">Pro v6.1 - Fixed</span></h1>
+    <h1>⚡ Jurnal Zoe <span class="badge">Pro v6.2 - Edit Fix</span></h1>
     <div class="header-actions">
         <button class="btn btn-quick" id="quickAddBtn" title="Pre-completează din ultima încărcare">⚡ Rapid</button>
         <button class="btn btn-theme" id="themeToggle" title="Schimbă tema">🌙</button>
@@ -734,7 +734,7 @@
 </div>
 
 <script>
-// Helper-e de securitate DOM
+// Helper-e de securitate DOM pentru prevenirea erorilor
 function setTxt(id, val) {
     const el = document.getElementById(id);
     if (el) el.textContent = val;
@@ -742,26 +742,6 @@ function setTxt(id, val) {
 function setStyleColor(id, color) {
     const el = document.getElementById(id);
     if (el) el.style.color = color;
-}
-function setStyleWidth(id, width) {
-    const el = document.getElementById(id);
-    if (el) el.style.width = width;
-}
-function setStyleBackground(id, bg) {
-    const el = document.getElementById(id);
-    if (el) el.style.background = bg;
-}
-function setStyleBorderLeftColor(id, color) {
-    const el = document.getElementById(id);
-    if (el) el.style.borderLeftColor = color;
-}
-
-// Funcție globală de generare a badge-urilor de consum
-function kwhBadge(val) {
-    if (val === null || val === undefined || isNaN(val)) return '<span style="color:var(--text-muted)">—</span>';
-    const v = Number(val);
-    const cls = v < 15 ? 'kwh-good' : v < 17 ? 'kwh-mid' : 'kwh-bad';
-    return `<span class="kwh-badge ${cls}">${v.toFixed(2)}</span>`;
 }
 
 if ('serviceWorker' in navigator) {
@@ -791,7 +771,6 @@ function parseDate(dateVal) {
     return new Date();
 }
 
-// Baza utilă de 23.3 kWh
 let cfg = {
     capNominal: 23.3, 
     soh: 88, 
@@ -839,7 +818,6 @@ document.querySelectorAll('.nav-tab').forEach(btn => {
 configDocRef.onSnapshot(doc => {
     if (doc.exists) {
         cfg = { ...cfg, ...doc.data() };
-        // O valoare goală veche nu trebuie să reactiveze abonamentul.
         if (!cfg.abonamentPanaLa) cfg.abonamentPanaLa = '2026-09-30';
         syncCfgToInputs();
         if (currentLogs.length > 0) renderApp(currentLogs);
@@ -1019,6 +997,91 @@ collectionRef.onSnapshot(snapshot => {
     renderApp(logs);
 }, err => toast('❌ Eroare citire: ' + err.message, null, 6000));
 
+
+// =========================================================================
+// SOLUȚIA PROBLEMEI DE EDITARE/ȘTERGERE: REINTRODUCEREA EVENT LISTENER-ULUI
+// =========================================================================
+const logsBodyEl = document.getElementById('logsBody');
+if (logsBodyEl) {
+    logsBodyEl.addEventListener('click', function(e) {
+        const editBtn = e.target.closest('.btn-edit');
+        const deleteBtn = e.target.closest('.btn-delete');
+
+        // ==== LOGICA PENTRU EDITARE ====
+        if (editBtn) {
+            const id = editBtn.dataset.id;
+            const log = processedLogs.find(l => l.id === id);
+            if (!log) return;
+
+            const editIdEl = document.getElementById('editingId');
+            if (editIdEl) editIdEl.value = log.id;
+            
+            const fields = {
+                'date': log.date,
+                'km': log.km,
+                'batteryStart': log.batteryStart,
+                'batteryEnd': log.batteryEnd,
+                'kwh': log.kwh,
+                'temp': log.temp !== undefined && log.temp !== null ? log.temp : '',
+                'driveType': log.driveType || 'Mixt',
+                'climate': log.climate || 'Oprit',
+                'useSubscription': log.chargeType || (log.isSubscription ? 'subscription' : 'external'),
+                'cost': log.manualCost || 0
+            };
+
+            Object.entries(fields).forEach(([fId, val]) => {
+                const el = document.getElementById(fId);
+                if (el) el.value = val;
+            });
+
+            updateChargeCostUI();
+
+            setTxt('submitBtn', 'Salvează modificările');
+            setTxt('formTitle', '✏️ Editează înregistrarea');
+            
+            const cancelBtn = document.getElementById('cancelEditBtn');
+            if (cancelBtn) cancelBtn.style.display = 'inline-block';
+            
+            // Auto-schimbăm pe tab-ul de încărcări dacă suntem în altă parte
+            const incarcariTabBtn = document.querySelector('.nav-tab[data-tab="tab-incarcari"]');
+            if (incarcariTabBtn) incarcariTabBtn.click();
+            
+            // Ducem utilizatorul sus la formular
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        // ==== LOGICA PENTRU ȘTERGERE CU UNDO ====
+        if (deleteBtn) {
+            const id = deleteBtn.dataset.id;
+            if (!id) return;
+
+            pendingDeleteId = id;
+            const filtered = currentLogs.filter(l => l.id !== id);
+            renderApp(filtered);
+
+            toast('🗑 Înregistrare în curs de ștergere...', () => {
+                clearTimeout(undoTimeoutId);
+                pendingDeleteId = null;
+                renderApp(currentLogs);
+                toast('↩️ Ștergere anulată!');
+            }, 5000);
+
+            undoTimeoutId = setTimeout(async () => {
+                if (pendingDeleteId === id) {
+                    try {
+                        await collectionRef.doc(id).delete();
+                        pendingDeleteId = null;
+                    } catch(err) {
+                        toast('❌ Eroare ștergere: ' + err.message);
+                    }
+                }
+            }, 5000);
+        }
+    });
+}
+// =========================================================================
+
+
 // Elementele de filtrare
 const filterMonthSelect = document.getElementById('filterMonthSelect');
 const filterSourceSelect = document.getElementById('filterSourceSelect');
@@ -1142,7 +1205,6 @@ function renderGeneralStats(logs, activeCycles) {
 
     const capUtil = cfg.capNominal * (cfg.soh / 100);
     const totalBatteryKwhEst = totalPlugKwh * (1 - cfg.pierderi / 100);
-    // computedCost conține deja costul fix al abonamentului o singură dată/ciclu.
     const grandTotalCost = totalExtraCosts;
 
     setTxt('statTotalCost', grandTotalCost.toFixed(2) + ' RON');
@@ -1249,9 +1311,6 @@ function renderTableAndStats() {
     if (!tbody) return;
     tbody.innerHTML = '';
 
-    // Fallback local: tabelul poate fi rerandat imediat după salvarea setărilor.
-    // Astfel, nu depinde de o funcție globală care ar putea lipsi într-o versiune
-    // mai veche rămasă în cache-ul browserului.
     const renderKwhBadge = (val) => {
         if (val === null || val === undefined || Number.isNaN(Number(val))) {
             return '<span style="color:var(--text-muted)">—</span>';
@@ -1360,8 +1419,6 @@ function renderMonthlyAggregates() {
         else m.kwhSubscription += Number(log.kwh);
     });
 
-    // Fiecare încărcare (în afară de prima) este asociată segmentului parcurs
-    // de la încărcarea anterioară. Asta păstrează corecte lunile la granițe.
     processedLogs.forEach((log, index) => {
         if (index === 0) return;
         const distance = Number(log.km) - Number(processedLogs[index - 1].km);
