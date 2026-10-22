@@ -415,7 +415,7 @@
                 <p class="sub" id="statBatteryVsPlug">Priză: 0 kWh | Baterie: 0 kWh</p>
             </div>
             <div class="stat-card" style="border-left-color: var(--warn)">
-                <h3>Consum Mediu</h3>
+                <h3>Consum Mediu (Din baterie)</h3>
                 <p id="statAvgKwh">— kWh/100km</p>
                 <p class="sub" id="statMovingAvgs">M3: — | M5: — kWh/100km</p>
             </div>
@@ -542,7 +542,7 @@
                                 <th>Sursă</th>
                                 <th>Condiții</th>
                                 <th>Cost</th>
-                                <th>kWh/100km</th>
+                                <th>kWh/100km (Baterie)</th>
                                 <th>Acțiuni</th>
                             </tr>
                         </thead>
@@ -550,7 +550,7 @@
                     </table>
                 </div>
                 
-                <!-- NEW TEXT BLOCK FOR TOTALS -->
+                <!-- TEXT BLOCK FOR TOTALS -->
                 <div id="filteredTotals" style="margin-top: 12px; font-size: 14px; font-weight: 700; text-align: right; color: var(--text-main);">
                     Total filtrat: 0.00 kWh | 0.00 RON
                 </div>
@@ -589,7 +589,7 @@
                                 <th>Distanță (km)</th>
                                 <th>kWh Total</th>
                                 <th>Cost Total</th>
-                                <th>Consum Mediu</th>
+                                <th>Consum Mediu (Bat)</th>
                                 <th>Cost Mediu</th>
                                 <th>% Acasă</th>
                             </tr>
@@ -641,7 +641,7 @@
             </div>
             <div class="panel-body">
                 <div class="chart-tabs">
-                    <button class="tab-btn active" id="tabKwhBtn">kWh/100km</button>
+                    <button class="tab-btn active" id="tabKwhBtn">kWh/100km (Baterie)</button>
                     <button class="tab-btn" id="tabRonBtn">RON/100km</button>
                 </div>
                 <div class="chart-wrap">
@@ -653,7 +653,7 @@
         <p class="section-label">Analiză Factori de Mediu</p>
         <div class="stats-grid">
             <div class="stat-card full" style="border-left-color: var(--info)">
-                <h3>❄️ Consum pe Anotimpuri</h3>
+                <h3>❄️ Consum pe Anotimpuri (Din baterie)</h3>
                 <p id="statSeasons">❄️ Iarnă: — | ☀️ Vară: —</p>
             </div>
             <div class="stat-card" style="border-left-color: var(--accent)">
@@ -1192,11 +1192,10 @@ function renderGeneralStats(logs, activeCycles) {
                 const socUsed = prevLog.batteryEnd - log.batteryStart;
                 let kwhPer100Segment = 0;
                 
-                // Calcul bazat pe diferența reală de SOC
+                // MODIFIED: Calcul bazat pe diferența reală de SOC fără pierderi AC adăugate
                 if (socUsed > 0) {
                     const kwhBat = (socUsed / 100) * capUtil;
-                    const kwhPlug = kwhBat / (1 - cfg.pierderi / 100);
-                    kwhPer100Segment = (kwhPlug / dist) * 100;
+                    kwhPer100Segment = (kwhBat / dist) * 100;
                 } else {
                     kwhPer100Segment = (log.kwh / dist) * 100;
                 }
@@ -1227,8 +1226,9 @@ function renderGeneralStats(logs, activeCycles) {
     if (logs.length > 1) {
         totalDistAll = logs[logs.length - 1].km - logs[0].km;
         if (totalDistAll > 0) {
-            const sumKwh = logs.slice(1).reduce((a, l) => a + Number(l.kwh), 0);
-            avgConsumption = (sumKwh / totalDistAll) * 100;
+            // Recalculating overall average based on battery consumption for the metric
+            const sumKwhBat = validKwhList.reduce((acc, curr) => acc + curr, 0) / (validKwhList.length || 1);
+            avgConsumption = sumKwhBat; // Using the average of all segment consumptions
         }
     }
 
@@ -1287,8 +1287,33 @@ function renderGeneralStats(logs, activeCycles) {
     const m5Val = last5.length > 0 ? (last5.reduce((a, b) => a + b, 0) / last5.length).toFixed(1) : '—';
     setTxt('statMovingAvgs', `M3: ${m3Val} | M5: ${m5Val} kWh/100km`);
 
-    const avgWinter = winterKm > 0 ? ((winterKwh / winterKm) * 100).toFixed(1) : '—';
-    const avgSummer = summerKm > 0 ? ((summerKwh / summerKm) * 100).toFixed(1) : '—';
+    // Using battery kwh for seasons to match the new metric
+    let winterBatKwh = 0;
+    let summerBatKwh = 0;
+    logs.forEach((log, i) => {
+        if(i > 0) {
+            const prevLog = logs[i - 1];
+            const dist = log.km - prevLog.km;
+            if(dist > 0) {
+                const socUsed = prevLog.batteryEnd - log.batteryStart;
+                let kwhBatSegment = 0;
+                if(socUsed > 0) {
+                    kwhBatSegment = (socUsed / 100) * capUtil;
+                } else {
+                    kwhBatSegment = log.kwh; // Fallback
+                }
+                const month = parseDate(log.date).getMonth() + 1;
+                if ([11, 12, 1, 2, 3].includes(month)) {
+                    winterBatKwh += kwhBatSegment;
+                } else {
+                    summerBatKwh += kwhBatSegment;
+                }
+            }
+        }
+    });
+
+    const avgWinter = winterKm > 0 ? ((winterBatKwh / winterKm) * 100).toFixed(1) : '—';
+    const avgSummer = summerKm > 0 ? ((summerBatKwh / summerKm) * 100).toFixed(1) : '—';
     setTxt('statSeasons', `❄️ Iarnă: ${avgWinter} | ☀️ Vară: ${avgSummer} kWh/100km`);
 
     // Economii față de termice
@@ -1344,12 +1369,12 @@ function renderTableAndStats() {
 
     const chartLabels = [], chartKwhData = [], chartRonData = [];
     
-    // NEW: Variables to track totals for the current filter
+    // Variables to track totals for the current filter
     let sumKwh = 0;
     let sumCost = 0;
 
     filtered.forEach((log) => {
-        // NEW: Add to totals
+        // Add to totals
         sumKwh += Number(log.kwh);
         sumCost += Number(log.computedCost);
 
@@ -1367,11 +1392,10 @@ function renderTableAndStats() {
                 const capUtil = cfg.capNominal * (cfg.soh / 100);
                 const socUsed = prevLog.batteryEnd - log.batteryStart;
                 
-                // Calcul bazat pe consumul real de energie din baterie
+                // MODIFIED: Calcul bazat pe consumul real de energie din baterie
                 if (socUsed > 0) {
                     const kwhBat = (socUsed / 100) * capUtil;
-                    const kwhPlug = kwhBat / (1 - cfg.pierderi / 100);
-                    kwhPer100 = (kwhPlug / dist) * 100;
+                    kwhPer100 = (kwhBat / dist) * 100;
                 } else {
                     kwhPer100 = (log.kwh / dist) * 100;
                 }
@@ -1407,11 +1431,11 @@ function renderTableAndStats() {
             </td>
         `;
         
-        // NEW: Changed appendChild to prepend so newest entries go to the top visually
+        // Changed appendChild to prepend so newest entries go to the top visually
         tbody.prepend(row);
     });
 
-    // NEW: Update the totals text block underneath the table
+    // Update the totals text block underneath the table
     const totalsEl = document.getElementById('filteredTotals');
     if (totalsEl) {
         totalsEl.innerHTML = `Total filtrat: <span style="color:var(--accent)">${sumKwh.toFixed(2)} kWh</span> | <span style="color:var(--purple)">${sumCost.toFixed(2)} RON</span>`;
@@ -1442,7 +1466,7 @@ function renderMonthlyAggregates() {
                 kwhSubscription: 0,
                 kwhTotal: 0,
                 costTotal: 0,
-                segmentKwh: 0,
+                segmentKwhBat: 0,
                 segmentKm: 0,
                 logs: []
             };
@@ -1457,14 +1481,24 @@ function renderMonthlyAggregates() {
         else m.kwhSubscription += Number(log.kwh);
     });
 
+    const capUtil = cfg.capNominal * (cfg.soh / 100);
+
     processedLogs.forEach((log, index) => {
         if (index === 0) return;
-        const distance = Number(log.km) - Number(processedLogs[index - 1].km);
+        const prevLog = processedLogs[index - 1];
+        const distance = Number(log.km) - Number(prevLog.km);
         if (distance <= 0) return;
         const d = parseDate(log.date);
         const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
         monthlyMap[key].segmentKm += distance;
-        monthlyMap[key].segmentKwh += Number(log.kwh);
+        
+        // MODIFIED: Use battery kwh for the monthly average as well
+        const socUsed = prevLog.batteryEnd - log.batteryStart;
+        if (socUsed > 0) {
+            monthlyMap[key].segmentKwhBat += (socUsed / 100) * capUtil;
+        } else {
+             monthlyMap[key].segmentKwhBat += Number(log.kwh);
+        }
     });
 
     const sortedMonths = Object.values(monthlyMap).sort((a, b) => b.dateObj - a.dateObj);
@@ -1475,7 +1509,7 @@ function renderMonthlyAggregates() {
         const formattedMonth = monthName.charAt(0).toUpperCase() + monthName.slice(1);
 
         const distDriven = m.segmentKm;
-        const avgKwh100 = distDriven > 0 ? ((m.segmentKwh / distDriven) * 100).toFixed(2) : '—';
+        const avgKwh100 = distDriven > 0 ? ((m.segmentKwhBat / distDriven) * 100).toFixed(2) : '—';
         const avgRon100 = distDriven > 0 ? ((m.costTotal / distDriven) * 100).toFixed(2) : '—';
         const homePct = m.kwhTotal > 0 ? ((m.kwhHome / m.kwhTotal) * 100).toFixed(1) : '0.0';
 
@@ -1574,7 +1608,7 @@ function renderChart(labels, data) {
     const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
     const gridColor  = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)';
     const labelColor = '#718096';
-    const metricLabel = activeChartMetric === 'kwh' ? 'kWh / 100 km' : 'RON / 100 km';
+    const metricLabel = activeChartMetric === 'kwh' ? 'kWh / 100 km (Baterie)' : 'RON / 100 km';
     const metricColor = activeChartMetric === 'kwh' ? '#00b894' : '#805ad5';
 
     chartInstance = new Chart(ctx, {
