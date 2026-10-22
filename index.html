@@ -549,6 +549,12 @@
                         <tbody id="logsBody"></tbody>
                     </table>
                 </div>
+                
+                <!-- NEW TEXT BLOCK FOR TOTALS -->
+                <div id="filteredTotals" style="margin-top: 12px; font-size: 14px; font-weight: 700; text-align: right; color: var(--text-main);">
+                    Total filtrat: 0.00 kWh | 0.00 RON
+                </div>
+
                 <div class="table-actions">
                     <button id="exportCsvBtn" class="btn btn-export">⬇ Descarcă CSV (Filtru selectat)</button>
                     <button id="exportPdfBtn" class="btn btn-settings">📄 Salvează PDF</button>
@@ -1337,8 +1343,16 @@ function renderTableAndStats() {
     });
 
     const chartLabels = [], chartKwhData = [], chartRonData = [];
+    
+    // NEW: Variables to track totals for the current filter
+    let sumKwh = 0;
+    let sumCost = 0;
 
     filtered.forEach((log) => {
+        // NEW: Add to totals
+        sumKwh += Number(log.kwh);
+        sumCost += Number(log.computedCost);
+
         const origIndex = processedLogs.findIndex(l => l.id === log.id);
         const row = document.createElement('tr');
         const d = parseDate(log.date);
@@ -1392,8 +1406,16 @@ function renderTableAndStats() {
                 <button class="btn-delete" data-id="${log.id}">Șterge</button>
             </td>
         `;
-        tbody.appendChild(row);
+        
+        // NEW: Changed appendChild to prepend so newest entries go to the top visually
+        tbody.prepend(row);
     });
+
+    // NEW: Update the totals text block underneath the table
+    const totalsEl = document.getElementById('filteredTotals');
+    if (totalsEl) {
+        totalsEl.innerHTML = `Total filtrat: <span style="color:var(--accent)">${sumKwh.toFixed(2)} kWh</span> | <span style="color:var(--purple)">${sumCost.toFixed(2)} RON</span>`;
+    }
 
     lastChartLabels = chartLabels;
     lastChartData = activeChartMetric === 'kwh' ? chartKwhData : chartRonData;
