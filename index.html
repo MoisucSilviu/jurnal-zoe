@@ -250,6 +250,16 @@
         }
         @media (max-width: 600px) { .settings-grid { grid-template-columns: 1fr; } }
 
+        .settings-subtitle {
+            grid-column: 1 / -1;
+            font-size: 13px;
+            font-weight: 700;
+            color: var(--accent);
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 6px;
+            margin-top: 10px;
+        }
+
         .filter-bar {
             display: flex;
             gap: 10px;
@@ -351,7 +361,7 @@
 <body>
 
 <header class="app-header">
-    <h1>⚡ Jurnal Zoe <span class="badge">Pro v6.4 - Subscription Fix</span></h1>
+    <h1>⚡ Jurnal Zoe <span class="badge">Pro v6.5 - Dual Sub</span></h1>
     <div class="header-actions">
         <button class="btn btn-quick" id="quickAddBtn" title="Pre-completează din ultima încărcare">⚡ Rapid</button>
         <button class="btn btn-theme" id="themeToggle" title="Schimbă tema">🌙</button>
@@ -591,8 +601,8 @@
         <p class="section-label">Stare Abonament & Defalcare Cheltuieli</p>
         <div class="stats-grid">
             <div class="stat-card full" style="border-left-color: var(--info); background-color: var(--surface-alt);">
-                <h3>📜 Status Abonament Activ</h3>
-                <p id="statSubscriptionStatus">Folosiți: 0.0 / 120 kWh (Rămași: 120.0 kWh)</p>
+                <h3>📜 Status Abonament Curent</h3>
+                <p id="statSubscriptionStatus">Folosiți: 0.0 / 60 kWh (Rămași: 60.0 kWh)</p>
                 <p class="sub" id="statSubscriptionStatusSub">—</p>
             </div>
 
@@ -607,7 +617,7 @@
                 <p class="sub" id="statKwhExternalTotal">0.0 kWh tot timpul</p>
             </div>
             <div class="stat-card" style="border-left-color: var(--warn)">
-                <h3>Abonament</h3>
+                <h3>Abonament (Total)</h3>
                 <p id="statCostSubscriptionTotal">0.00 RON</p>
                 <p class="sub" id="statKwhSubscriptionTotal">0.0 kWh din abonament</p>
             </div>
@@ -664,10 +674,11 @@
     <div id="tab-setari" class="tab-content">
         <div class="panel">
             <div class="panel-header">
-                <h2>⚙ Setări, Profil Baterie & Parametri Comparativi</h2>
+                <h2>⚙ Setări, Profil Baterie & Abonamente</h2>
             </div>
             <div class="panel-body">
                 <div class="settings-grid">
+                    <div class="settings-subtitle">🔋 Profil Baterie & Tarif Acasă</div>
                     <div class="form-group">
                         <label>Capacitate Nominală Baterie (kWh)</label>
                         <input type="number" id="cfgCapNominal" value="23.3" step="0.1">
@@ -685,8 +696,34 @@
                         <input type="number" id="cfgTarifAcasa" value="1.3155" step="0.0001" min="0">
                     </div>
                     <div class="form-group">
-                        <label>Cost abonament (RON)</label>
-                        <input type="number" id="cfgCostAbo" value="200" step="1">
+                        <label>Ritm zilnic implicit (km/zi)</label>
+                        <input type="number" id="cfgDailyKm" value="35" step="1">
+                    </div>
+
+                    <div class="settings-subtitle">📜 Abonament Curent (Nou — nu afectează lunile trecute)</div>
+                    <div class="form-group">
+                        <label>Activ de la data</label>
+                        <input type="date" id="cfgAbonamentDeLa" value="2026-11-01">
+                    </div>
+                    <div class="form-group">
+                        <label>Valabil până la data</label>
+                        <input type="date" id="cfgAbonamentPanaLa" value="2026-12-31">
+                    </div>
+                    <div class="form-group">
+                        <label>Ziua de start lunară (1–28)</label>
+                        <input type="number" id="cfgZiStart" value="6" min="1" max="28">
+                    </div>
+                    <div class="form-group">
+                        <label>Cost abonament curent (RON)</label>
+                        <input type="number" id="cfgCostAbo" value="105" step="1">
+                    </div>
+                    <div class="form-group">
+                        <label>kWh incluși abonament curent</label>
+                        <input type="number" id="cfgKwhIncluse" value="60" step="1">
+                    </div>
+                    <div class="form-group">
+                        <label>Tarif depășire curent (RON/kWh)</label>
+                        <input type="number" id="cfgTarifDep" value="1.99" step="0.01">
                     </div>
                     <div class="form-group">
                         <label>Mod calcul abonament</label>
@@ -695,22 +732,30 @@
                             <option value="bundle">Pachet kWh (se reînnoiește doar la epuizarea kWh)</option>
                         </select>
                     </div>
+
+                    <div class="settings-subtitle">🗂️ Abonament Vechi / Istoric (înainte de data de activare a celui nou)</div>
                     <div class="form-group">
-                        <label>Ziua de start abonament (1–28)</label>
-                        <input type="number" id="cfgZiStart" value="1" min="1" max="28">
+                        <label>Valabil până la data (vechi)</label>
+                        <input type="date" id="cfgOldAbonamentPanaLa" value="2026-10-13">
                     </div>
                     <div class="form-group">
-                        <label>Ultima zi cu abonament</label>
-                        <input type="date" id="cfgAbonamentPanaLa" value="2026-12-31">
+                        <label>Ziua de start veche (1–28)</label>
+                        <input type="number" id="cfgOldZiStart" value="14" min="1" max="28">
                     </div>
                     <div class="form-group">
-                        <label>kWh incluși în abonament</label>
-                        <input type="number" id="cfgKwhIncluse" value="120" step="1">
+                        <label>Cost abonament vechi (RON)</label>
+                        <input type="number" id="cfgOldCostAbo" value="200" step="1">
                     </div>
                     <div class="form-group">
-                        <label>Tarif depășire abonament (RON/kWh)</label>
-                        <input type="number" id="cfgTarifDep" value="2.0" step="0.01">
+                        <label>kWh incluși abonament vechi</label>
+                        <input type="number" id="cfgOldKwhIncluse" value="120" step="1">
                     </div>
+                    <div class="form-group">
+                        <label>Tarif depășire vechi (RON/kWh)</label>
+                        <input type="number" id="cfgOldTarifDep" value="2.0" step="0.01">
+                    </div>
+
+                    <div class="settings-subtitle">⛽ Parametri Comparație Termice</div>
                     <div class="form-group">
                         <label>Preț litru carburant (RON)</label>
                         <input type="number" id="cfgPretLitru" value="7.2" step="0.01">
@@ -722,10 +767,6 @@
                     <div class="form-group">
                         <label>Consum Ford (l/100km)</label>
                         <input type="number" id="cfgConsumF" value="10.5" step="0.1">
-                    </div>
-                    <div class="form-group">
-                        <label>Ritm zilnic implicit (km/zi)</label>
-                        <input type="number" id="cfgDailyKm" value="35" step="1">
                     </div>
                 </div>
                 <br>
@@ -779,18 +820,24 @@ function parseDate(dateVal) {
     return new Date();
 }
 
-// Configurație implicită
+// Configurație implicită (separă abonamentul curent de cel vechi)
 let cfg = {
     capNominal: 23.3, 
     soh: 88, 
     pierderi: 10,
-    costAbo: 200, 
-    kwhIncluse: 120, 
-    tarifDep: 2.0, 
-    ziStart: 1,
+    costAbo: 105, 
+    kwhIncluse: 60, 
+    tarifDep: 1.99, 
+    ziStart: 6,
     modAbonament: 'monthly',
-    tarifAcasa: 1.3155,
+    abonamentDeLa: '2026-11-01',
     abonamentPanaLa: '2026-12-31',
+    oldCostAbo: 200,
+    oldKwhIncluse: 120,
+    oldTarifDep: 2.0,
+    oldZiStart: 14,
+    oldAbonamentPanaLa: '2026-10-13',
+    tarifAcasa: 1.3155,
     pretLitru: 7.2, 
     dailyKm: 35, 
     consumQ: 7.4, 
@@ -827,20 +874,39 @@ document.querySelectorAll('.nav-tab').forEach(btn => {
 // Sincronizare Firestore
 configDocRef.onSnapshot(doc => {
     if (doc.exists) {
-        cfg = { ...cfg, ...doc.data() };
-        if (!cfg.modAbonament) cfg.modAbonament = 'monthly';
+        const data = doc.data();
+        cfg = {
+            ...cfg,
+            ...data,
+            modAbonament: data.modAbonament || 'monthly',
+            abonamentDeLa: data.abonamentDeLa || '2026-11-01',
+            oldCostAbo: data.oldCostAbo !== undefined ? Number(data.oldCostAbo) : 200,
+            oldKwhIncluse: data.oldKwhIncluse !== undefined ? Number(data.oldKwhIncluse) : 120,
+            oldTarifDep: data.oldTarifDep !== undefined ? Number(data.oldTarifDep) : 2.0,
+            oldZiStart: data.oldZiStart !== undefined ? Number(data.oldZiStart) : 14,
+            oldAbonamentPanaLa: data.oldAbonamentPanaLa !== undefined ? data.oldAbonamentPanaLa : '2026-10-13'
+        };
         syncCfgToInputs();
         if (currentLogs.length > 0) renderApp(currentLogs);
     }
 });
 
 async function saveCfg() {
-    ['capNominal','soh','pierderi','costAbo','kwhIncluse','tarifDep','ziStart','tarifAcasa','pretLitru','dailyKm','consumQ','consumF'].forEach(k => {
+    const numFields = [
+        'capNominal','soh','pierderi',
+        'costAbo','kwhIncluse','tarifDep','ziStart',
+        'oldCostAbo','oldKwhIncluse','oldTarifDep','oldZiStart',
+        'tarifAcasa','pretLitru','dailyKm','consumQ','consumF'
+    ];
+    numFields.forEach(k => {
         const el = document.getElementById('cfg' + k.charAt(0).toUpperCase() + k.slice(1));
         if (el) cfg[k] = Number(el.value);
     });
-    const abonamentPanaLa = document.getElementById('cfgAbonamentPanaLa');
-    if (abonamentPanaLa) cfg.abonamentPanaLa = abonamentPanaLa.value;
+    const dateFields = ['abonamentDeLa', 'abonamentPanaLa', 'oldAbonamentPanaLa'];
+    dateFields.forEach(k => {
+        const el = document.getElementById('cfg' + k.charAt(0).toUpperCase() + k.slice(1));
+        if (el) cfg[k] = el.value;
+    });
     const modAbonamentEl = document.getElementById('cfgModAbonament');
     if (modAbonamentEl) cfg.modAbonament = modAbonamentEl.value;
     
@@ -854,15 +920,21 @@ async function saveCfg() {
 }
 
 function syncCfgToInputs() {
-    const map = { CapNominal:'capNominal', Soh:'soh', Pierderi:'pierderi', CostAbo:'costAbo', 
-                  KwhIncluse:'kwhIncluse', TarifDep:'tarifDep', ZiStart:'ziStart', TarifAcasa:'tarifAcasa', 
-                  PretLitru:'pretLitru', DailyKm:'dailyKm', ConsumQ:'consumQ', ConsumF:'consumF' };
+    const map = {
+        CapNominal: 'capNominal', Soh: 'soh', Pierderi: 'pierderi',
+        CostAbo: 'costAbo', KwhIncluse: 'kwhIncluse', TarifDep: 'tarifDep', ZiStart: 'ziStart',
+        OldCostAbo: 'oldCostAbo', OldKwhIncluse: 'oldKwhIncluse', OldTarifDep: 'oldTarifDep', OldZiStart: 'oldZiStart',
+        TarifAcasa: 'tarifAcasa', PretLitru: 'pretLitru', DailyKm: 'dailyKm', ConsumQ: 'consumQ', ConsumF: 'consumF'
+    };
     Object.entries(map).forEach(([suffix, key]) => {
         const el = document.getElementById('cfg' + suffix);
         if (el) el.value = cfg[key];
     });
-    const abonamentPanaLa = document.getElementById('cfgAbonamentPanaLa');
-    if (abonamentPanaLa) abonamentPanaLa.value = cfg.abonamentPanaLa || '';
+    ['AbonamentDeLa', 'AbonamentPanaLa', 'OldAbonamentPanaLa'].forEach(suffix => {
+        const key = suffix.charAt(0).toLowerCase() + suffix.slice(1);
+        const el = document.getElementById('cfg' + suffix);
+        if (el) el.value = cfg[key] || '';
+    });
     const modAbonamentEl = document.getElementById('cfgModAbonament');
     if (modAbonamentEl) modAbonamentEl.value = cfg.modAbonament || 'monthly';
 }
@@ -1101,11 +1173,11 @@ if (btnQuickFilterExternal) {
     });
 }
 
-function getSubscriptionCycleKey(dateVal) {
+function getSubscriptionCycleKey(dateVal, customStartDay = null) {
     const d = parseDate(dateVal);
     let year = d.getFullYear();
     let month = d.getMonth();
-    const startDay = Math.min(28, Math.max(1, Number(cfg.ziStart || 1)));
+    const startDay = Math.min(28, Math.max(1, Number(customStartDay ?? cfg.ziStart ?? 1)));
     if (d.getDate() < startDay) {
         month -= 1;
         if (month < 0) { month = 11; year -= 1; }
@@ -1114,42 +1186,60 @@ function getSubscriptionCycleKey(dateVal) {
 }
 
 function renderApp(logs) {
-    const cycleTracker = {};
+    const newCycleTracker = {};
+    const oldCycleTracker = {};
     const activeCycles = new Set();
     let bundleUsedKwh = 0;
 
+    const newFrom = cfg.abonamentDeLa || '';
+    const newTo = cfg.abonamentPanaLa || '';
+    const oldTo = cfg.oldAbonamentPanaLa || '';
+
     processedLogs = logs.map(log => {
         const chargeType = log.chargeType || (log.isSubscription ? 'subscription' : 'external');
-        const cycleKey = getSubscriptionCycleKey(log.date);
+        const logDay = String(log.date || '').slice(0, 10);
+        const cycleKey = getSubscriptionCycleKey(log.date, cfg.ziStart);
         let sessionCost = 0;
         let subscriptionBaseCost = 0;
-        const isWithinSubDate = !cfg.abonamentPanaLa || log.date.slice(0, 10) <= cfg.abonamentPanaLa;
         
-        if (chargeType === 'subscription' && isWithinSubDate) {
-            if (cfg.modAbonament === 'bundle') {
-                // Mod Pachet kWh: se taxează o singură dată la începerea pachetului și nu se reînnoiește
-                // până când nu se consumă toți kWh incluși (cfg.kwhIncluse).
-                if (bundleUsedKwh === 0) {
-                    subscriptionBaseCost = Number(cfg.costAbo) || 0;
-                }
-                const nextBundle = bundleUsedKwh + Number(log.kwh);
-                if (nextBundle >= cfg.kwhIncluse) {
-                    const overKwh = nextBundle - cfg.kwhIncluse;
-                    sessionCost = overKwh * (Number(cfg.tarifDep) || 0);
-                    bundleUsedKwh = 0; // Pachet epuizat; următoarea încărcare va deschide un pachet nou
+        if (chargeType === 'subscription') {
+            const isNewSub = (!newFrom || logDay >= newFrom) && (!newTo || logDay <= newTo);
+            const isOldSub = Boolean(newFrom && logDay < newFrom) && (!oldTo || logDay <= oldTo);
+
+            if (isNewSub) {
+                if (cfg.modAbonament === 'bundle') {
+                    if (bundleUsedKwh === 0) {
+                        subscriptionBaseCost = Number(cfg.costAbo) || 0;
+                    }
+                    const nextBundle = bundleUsedKwh + Number(log.kwh);
+                    if (nextBundle >= cfg.kwhIncluse) {
+                        const overKwh = nextBundle - cfg.kwhIncluse;
+                        sessionCost = overKwh * (Number(cfg.tarifDep) || 0);
+                        bundleUsedKwh = 0;
+                    } else {
+                        bundleUsedKwh = nextBundle;
+                    }
                 } else {
-                    bundleUsedKwh = nextBundle;
+                    const key = 'new-' + getSubscriptionCycleKey(log.date, cfg.ziStart);
+                    activeCycles.add(key);
+                    const prev = newCycleTracker[key] || 0;
+                    const next = prev + Number(log.kwh);
+                    if (prev === 0) subscriptionBaseCost = Number(cfg.costAbo) || 0;
+                    if (next > cfg.kwhIncluse) {
+                        sessionCost = Math.min(Number(log.kwh), next - cfg.kwhIncluse) * (Number(cfg.tarifDep) || 0);
+                    }
+                    newCycleTracker[key] = next;
                 }
-            } else {
-                // Mod Ciclu Lunar: se taxează o singură dată pe ciclu (începând cu cfg.ziStart)
-                activeCycles.add(cycleKey);
-                const prev = cycleTracker[cycleKey] || 0;
+            } else if (isOldSub) {
+                const key = 'old-' + getSubscriptionCycleKey(log.date, cfg.oldZiStart);
+                activeCycles.add(key);
+                const prev = oldCycleTracker[key] || 0;
                 const next = prev + Number(log.kwh);
-                if (prev === 0) subscriptionBaseCost = Number(cfg.costAbo) || 0;
-                if (next > cfg.kwhIncluse) {
-                    sessionCost = Math.min(Number(log.kwh), next - cfg.kwhIncluse) * (Number(cfg.tarifDep) || 0);
+                if (prev === 0) subscriptionBaseCost = Number(cfg.oldCostAbo) || 0;
+                if (next > cfg.oldKwhIncluse) {
+                    sessionCost = Math.min(Number(log.kwh), next - cfg.oldKwhIncluse) * (Number(cfg.oldTarifDep) || 0);
                 }
-                cycleTracker[cycleKey] = next;
+                oldCycleTracker[key] = next;
             }
         } else if (chargeType === 'home') {
             sessionCost = Number(log.kwh) * Number(log.unitPrice ?? cfg.tarifAcasa);
@@ -1159,17 +1249,17 @@ function renderApp(logs) {
         return { ...log, chargeType, computedCost: sessionCost + subscriptionBaseCost, cycleKey };
     });
 
-    // Actualizare card status abonament în Tab Costuri
+    // Actualizare card status abonament curent în Tab Costuri
     if (cfg.modAbonament === 'bundle') {
         const rem = Math.max(0, cfg.kwhIncluse - bundleUsedKwh);
         setTxt('statSubscriptionStatus', `Folosiți din pachet: ${bundleUsedKwh.toFixed(1)} / ${cfg.kwhIncluse} kWh (Rămași: ${rem.toFixed(1)} kWh)`);
-        setTxt('statSubscriptionStatusSub', `Mod Pachet kWh — nu se retaxează până la epuizarea celor ${cfg.kwhIncluse} kWh.`);
+        setTxt('statSubscriptionStatusSub', `Abonament activ din ${cfg.abonamentDeLa || '—'} · Mod Pachet kWh.`);
     } else {
-        const currentCycleKey = getSubscriptionCycleKey(new Date());
-        const usedCurrent = cycleTracker[currentCycleKey] || 0;
+        const currentKey = 'new-' + getSubscriptionCycleKey(new Date(), cfg.ziStart);
+        const usedCurrent = newCycleTracker[currentKey] || 0;
         const rem = Math.max(0, cfg.kwhIncluse - usedCurrent);
         setTxt('statSubscriptionStatus', `Folosiți în ciclul curent: ${usedCurrent.toFixed(1)} / ${cfg.kwhIncluse} kWh (Rămași: ${rem.toFixed(1)} kWh)`);
-        setTxt('statSubscriptionStatusSub', `Mod Ciclu Lunar — se reînnoiește în ziua ${cfg.ziStart || 1} a lunii.`);
+        setTxt('statSubscriptionStatusSub', `Abonament activ din ${cfg.abonamentDeLa || '—'} · Se reînnoiește în ziua ${cfg.ziStart || 1} a lunii.`);
     }
 
     populateMonthFilterOptions(processedLogs);
