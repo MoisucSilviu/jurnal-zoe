@@ -386,7 +386,7 @@
         <div class="stats-grid">
             <div class="stat-card full" style="border-left-color: var(--accent); background-color: var(--surface-alt);">
                 <h3>🔋 Profil Baterie & Health Dashboard</h3>
-                <p id="statHealthOverview">SOH: 88% | Cap. Utilă: 20.50 kWh | Km Actuali: —</p>
+                <p id="statHealthOverview">SOH: 86% | Cap. Utilă: 20.04 kWh | Km Actuali: —</p>
                 <p class="sub" id="statRangeOverview">Autonomie est. (100%): ~136 km | (80%): ~109 km | Utilizabil (20% → 80%): ~82 km</p>
             </div>
         </div>
@@ -685,7 +685,7 @@
                     </div>
                     <div class="form-group">
                         <label>SOH Baterie (%)</label>
-                        <input type="number" id="cfgSoh" value="88" step="1" min="1" max="100">
+                        <input type="number" id="cfgSoh" value="86" step="1" min="1" max="100">
                     </div>
                     <div class="form-group">
                         <label>Pierderi Încărcare AC (%)</label>
@@ -804,10 +804,9 @@ function parseDate(dateVal) {
     if (dateVal instanceof Date) return dateVal;
     if (typeof dateVal === 'object' && dateVal.toDate) return dateVal.toDate();
     
-    let d = new Date(dateVal);
-    if (!isNaN(d.getTime())) return d;
-
-    const match = String(dateVal).match(/(\d{1,2})[\.\/](\d{1,2})[\.\/](\d{4})[\s,]+(\d{1,2}):(\d{2})/);
+    const str = String(dateVal);
+    // dd.mm.yyyy hh:mm first: the native parser would read 03.04.2026 as 4 March
+    const match = str.match(/(\d{1,2})[\.\/](\d{1,2})[\.\/](\d{4})[\s,]+(\d{1,2}):(\d{2})/);
     if (match) {
         return new Date(
             parseInt(match[3], 10),
@@ -817,13 +816,27 @@ function parseDate(dateVal) {
             parseInt(match[5], 10)
         );
     }
-    return new Date();
+    // date-only ISO would be parsed as UTC midnight and can shift a day
+    const dOnly = str.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (dOnly) return new Date(+dOnly[1], +dOnly[2] - 1, +dOnly[3]);
+    return new Date(dateVal); // Invalid Date for garbage, never "now"
+}
+
+// local calendar day as YYYY-MM-DD, used for plan boundaries instead of raw string slices
+function isoDay(dateVal) {
+    const d = parseDate(dateVal);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+// escape stored strings before they go into innerHTML
+function esc(v) {
+    return String(v ?? '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
 }
 
 // Configurație implicită (separă abonamentul curent de cel vechi)
 let cfg = {
     capNominal: 23.3, 
-    soh: 88, 
+    soh: 86, 
     pierderi: 10,
     costAbo: 105, 
     kwhIncluse: 60, 
@@ -887,7 +900,7 @@ configDocRef.onSnapshot(doc => {
             oldAbonamentPanaLa: data.oldAbonamentPanaLa !== undefined ? data.oldAbonamentPanaLa : '2026-10-13'
         };
         syncCfgToInputs();
-        if (currentLogs.length > 0) renderApp(currentLogs);
+        if (currentLogs.length > 0) renderApp(visibleLogs(currentLogs));
     }
 });
 
@@ -912,7 +925,7 @@ async function saveCfg() {
     
     try {
         await configDocRef.set(cfg, { merge: true });
-        renderApp(currentLogs);
+        renderApp(visibleLogs(currentLogs));
         toast('✅ Setări salvate în Cloud Firestore!');
     } catch(err) {
         toast('❌ Eroare salvare setări: ' + err.message);
@@ -945,8 +958,8 @@ let currentLogs   = [];
 let processedLogs = [];
 let lastChartLabels = [], lastChartData = [];
 let activeChartMetric = 'kwh';
-let undoTimeoutId = null;
-let pendingDeleteId = null;
+const pendingDeletes = new Map(); // id -> timeout id, one timer per pending delete
+const visibleLogs = logs => logs.filter(l => !pendingDeletes.has(l.id));
 
 function toast(msg, actionCallback = null, duration = 3500) {
     const t = document.getElementById('toast');
@@ -1032,8 +1045,29 @@ if (chargeFormEl) {
             chargeType,
             unitPrice:      chargeType === 'home' ? cfg.tarifAcasa : null,
             manualCost:     chargeType === 'external' ? (Number(document.getElementById('cost')?.value) || 0) : 0,
-            createdAt:      firebase.firestore.FieldValue.serverTimestamp(),
         };
+
+        // an edit keeps the historic price and the original createdAt
+        if (editingId) {
+            const existing = currentLogs.find(l => l.id === editingId);
+            if (chargeType === 'home' && existing && existing.unitPrice != null) entry.unitPrice = existing.unitPrice;
+        } else {
+            entry.createdAt = firebase.firestore.FieldValue.serverTimestamp();
+        }
+
+        const others = currentLogs.filter(l => l.id !== editingId);
+        const entryDate = parseDate(entry.date);
+        const prev = others.filter(l => parseDate(l.date) <= entryDate).pop();
+        let invalid = null;
+        if (!(entry.kwh > 0)) invalid = 'kWh trebuie să fie > 0';
+        else if (entry.batteryEnd < entry.batteryStart) invalid = 'Bateria finală trebuie să fie >= cea inițială';
+        else if (prev && entry.km < prev.km) invalid = 'Kilometrajul nu poate scădea față de înregistrarea anterioară';
+        else if (isNaN(entryDate.getTime())) invalid = 'Dată invalidă';
+        if (invalid) {
+            toast('❌ ' + invalid, null, 5000);
+            if (submitBtn) submitBtn.disabled = false;
+            return;
+        }
 
         try {
             if (editingId) {
@@ -1080,7 +1114,7 @@ collectionRef.onSnapshot(snapshot => {
     
     logs.sort((a, b) => parseDate(a.date) - parseDate(b.date));
     currentLogs = logs;
-    renderApp(logs);
+    renderApp(visibleLogs(logs));
 }, err => toast('❌ Eroare citire: ' + err.message, null, 6000));
 
 // Evenimentul pentru Editare și Ștergere din tabel
@@ -1132,28 +1166,25 @@ if (logsBodyEl) {
 
         if (deleteBtn) {
             const id = deleteBtn.dataset.id;
-            if (!id) return;
+            if (!id || pendingDeletes.has(id)) return;
 
-            pendingDeleteId = id;
-            const filtered = currentLogs.filter(l => l.id !== id);
-            renderApp(filtered);
-
-            toast('🗑 Înregistrare în curs de ștergere...', () => {
-                clearTimeout(undoTimeoutId);
-                pendingDeleteId = null;
-                renderApp(currentLogs);
-                toast('↩️ Ștergere anulată!');
-            }, 5000);
-
-            undoTimeoutId = setTimeout(async () => {
-                if (pendingDeleteId === id) {
+            pendingDeletes.set(id, setTimeout(async () => {
+                if (pendingDeletes.has(id)) {
                     try {
                         await collectionRef.doc(id).delete();
-                        pendingDeleteId = null;
                     } catch(err) {
                         toast('❌ Eroare ștergere: ' + err.message);
                     }
+                    pendingDeletes.delete(id);
                 }
+            }, 5000));
+            renderApp(visibleLogs(currentLogs));
+
+            toast('🗑 Înregistrare în curs de ștergere...', () => {
+                clearTimeout(pendingDeletes.get(id));
+                pendingDeletes.delete(id);
+                renderApp(visibleLogs(currentLogs));
+                toast('↩️ Ștergere anulată!');
             }, 5000);
         }
     });
@@ -1186,6 +1217,11 @@ function getSubscriptionCycleKey(dateVal, customStartDay = null) {
 }
 
 function renderApp(logs) {
+    const badDates = logs.filter(l => isNaN(parseDate(l.date).getTime()));
+    if (badDates.length) {
+        toast(`⚠️ ${badDates.length} înregistrare(i) cu dată invalidă sunt excluse din calcule.`, null, 6000);
+        logs = logs.filter(l => !isNaN(parseDate(l.date).getTime()));
+    }
     const newCycleTracker = {};
     const oldCycleTracker = {};
     const activeCycles = new Set();
@@ -1197,10 +1233,11 @@ function renderApp(logs) {
 
     processedLogs = logs.map(log => {
         const chargeType = log.chargeType || (log.isSubscription ? 'subscription' : 'external');
-        const logDay = String(log.date || '').slice(0, 10);
+        const logDay = isoDay(log.date);
         const cycleKey = getSubscriptionCycleKey(log.date, cfg.ziStart);
         let sessionCost = 0;
         let subscriptionBaseCost = 0;
+        let planGap = false;
         
         if (chargeType === 'subscription') {
             const isNewSub = (!newFrom || logDay >= newFrom) && (!newTo || logDay <= newTo);
@@ -1208,7 +1245,7 @@ function renderApp(logs) {
 
             if (isNewSub) {
                 if (cfg.modAbonament === 'bundle') {
-                    if (bundleUsedKwh === 0) {
+                    if (bundleUsedKwh === 0 && Number(log.kwh) > 0) {
                         subscriptionBaseCost = Number(cfg.costAbo) || 0;
                     }
                     const nextBundle = bundleUsedKwh + Number(log.kwh);
@@ -1240,13 +1277,15 @@ function renderApp(logs) {
                     sessionCost = Math.min(Number(log.kwh), next - cfg.oldKwhIncluse) * (Number(cfg.oldTarifDep) || 0);
                 }
                 oldCycleTracker[key] = next;
+            } else {
+                planGap = true; // date outside both plans: cost unknown, flagged instead of silently 0
             }
         } else if (chargeType === 'home') {
             sessionCost = Number(log.kwh) * Number(log.unitPrice ?? cfg.tarifAcasa);
         } else {
             sessionCost = Number(log.manualCost) || 0;
         }
-        return { ...log, chargeType, computedCost: sessionCost + subscriptionBaseCost, cycleKey };
+        return { ...log, chargeType, computedCost: sessionCost + subscriptionBaseCost, cycleKey, planGap };
     });
 
     // Actualizare card status abonament curent în Tab Costuri
@@ -1299,6 +1338,7 @@ function renderGeneralStats(logs, activeCycles) {
     let homeCostAll = 0, externalCostAll = 0, subscriptionCostAll = 0;
     let winterKwh = 0, winterKm = 0, summerKwh = 0, summerKm = 0;
     let validKwhList = [];
+    let socKwhSum = 0, socKmSum = 0;
 
     logs.forEach((log, i) => {
         totalPlugKwh += Number(log.kwh);
@@ -1321,16 +1361,14 @@ function renderGeneralStats(logs, activeCycles) {
             if (dist > 0) {
                 const capUtil = cfg.capNominal * (cfg.soh / 100);
                 const socUsed = prevLog.batteryEnd - log.batteryStart;
-                let kwhPer100Segment = 0;
-                
+
+                // no SoC drop: battery energy is unknown, do not substitute plug kWh
                 if (socUsed > 0) {
                     const kwhBat = (socUsed / 100) * capUtil;
-                    kwhPer100Segment = (kwhBat / dist) * 100;
-                } else {
-                    kwhPer100Segment = (log.kwh / dist) * 100;
+                    validKwhList.push((kwhBat / dist) * 100);
+                    socKwhSum += kwhBat;
+                    socKmSum += dist;
                 }
-
-                validKwhList.push(kwhPer100Segment);
 
                 const month = parseDate(log.date).getMonth() + 1;
                 if ([11, 12, 1, 2, 3].includes(month)) {
@@ -1356,14 +1394,16 @@ function renderGeneralStats(logs, activeCycles) {
     if (logs.length > 1) {
         totalDistAll = logs[logs.length - 1].km - logs[0].km;
         if (totalDistAll > 0 && validKwhList.length > 0) {
-            avgConsumption = validKwhList.reduce((acc, curr) => acc + curr, 0) / validKwhList.length;
+            avgConsumption = (socKwhSum / socKmSum) * 100; // distance-weighted
         }
     }
 
     setTxt('statTotalDist', `${totalDistAll.toLocaleString('ro-RO')} km`);
     setTxt('statTotalLogsCount', `${logs.length} încărcări`);
 
-    const realCostPer100 = totalDistAll > 0 ? (grandTotalCost / totalDistAll) * 100 : 0;
+    // fill-to-fill: the first charge refuels km driven before the first odometer reading
+    const costForDist = logs.length > 1 ? grandTotalCost - logs[0].computedCost : grandTotalCost;
+    const realCostPer100 = totalDistAll > 0 ? (costForDist / totalDistAll) * 100 : 0;
     setTxt('statAvgCostReal', realCostPer100 > 0 ? `${realCostPer100.toFixed(2)} RON/100km` : '— RON/100km');
 
     const range100 = (capUtil / avgConsumption) * 100;
@@ -1417,25 +1457,28 @@ function renderGeneralStats(logs, activeCycles) {
 
     let winterBatKwh = 0;
     let summerBatKwh = 0;
+    let winterSocKm = 0, summerSocKm = 0;
     logs.forEach((log, i) => {
         if (i > 0) {
             const prevLog = logs[i - 1];
             const dist = log.km - prevLog.km;
             if (dist > 0) {
                 const socUsed = prevLog.batteryEnd - log.batteryStart;
-                const kwhBatSegment = socUsed > 0 ? (socUsed / 100) * capUtil : log.kwh;
-                const month = parseDate(log.date).getMonth() + 1;
-                if ([11, 12, 1, 2, 3].includes(month)) {
-                    winterBatKwh += kwhBatSegment;
-                } else {
-                    summerBatKwh += kwhBatSegment;
+                if (socUsed > 0) {
+                    const kwhBatSegment = (socUsed / 100) * capUtil;
+                    const month = parseDate(log.date).getMonth() + 1;
+                    if ([11, 12, 1, 2, 3].includes(month)) {
+                        winterBatKwh += kwhBatSegment; winterSocKm += dist;
+                    } else {
+                        summerBatKwh += kwhBatSegment; summerSocKm += dist;
+                    }
                 }
             }
         }
     });
 
-    const avgWinter = winterKm > 0 ? ((winterBatKwh / winterKm) * 100).toFixed(1) : '—';
-    const avgSummer = summerKm > 0 ? ((summerBatKwh / summerKm) * 100).toFixed(1) : '—';
+    const avgWinter = winterSocKm > 0 ? ((winterBatKwh / winterSocKm) * 100).toFixed(1) : '—';
+    const avgSummer = summerSocKm > 0 ? ((summerBatKwh / summerSocKm) * 100).toFixed(1) : '—';
     setTxt('statSeasons', `❄️ Iarnă: ${avgWinter} | ☀️ Vară: ${avgSummer} kWh/100km`);
 
     // Economii față de termice
@@ -1443,21 +1486,27 @@ function renderGeneralStats(logs, activeCycles) {
         setTxt('statAvgKwh', avgConsumption.toFixed(2) + ' kWh/100km');
         const costQ = (totalDistAll / 100) * cfg.consumQ * cfg.pretLitru;
         const costF = (totalDistAll / 100) * cfg.consumF * cfg.pretLitru;
-        const ecoQ  = costQ - grandTotalCost;
-        const ecoF  = costF - grandTotalCost;
+        const ecoQ  = costQ - costForDist;
+        const ecoF  = costF - costForDist;
+        const evPerKm = costForDist / totalDistAll;
+        // km needed to close the deficit: each km saves (fuel RON/km - EV RON/km)
+        const kmToProfit = (eco, l100) => {
+            const gap = (l100 * cfg.pretLitru) / 100 - evPerKm;
+            return gap > 0 ? '~' + Math.ceil(Math.abs(eco) / gap) + ' km' : 'nu se atinge la costurile actuale';
+        };
 
         if (ecoQ >= 0) {
             setTxt('statEconomyQashqai', `🟢 +${ecoQ.toFixed(0)} RON economisiți față de Qashqai (${cfg.consumQ}l/100km)`);
             setStyleColor('statEconomyQashqai', 'var(--accent)');
         } else {
-            setTxt('statEconomyQashqai', `⏳ Qashqai (${cfg.consumQ}l): mai ai ~${Math.ceil((Math.abs(ecoQ) / (cfg.consumQ * cfg.pretLitru)) * 100)} km până la profit net (${ecoQ.toFixed(0)} RON)`);
+            setTxt('statEconomyQashqai', `⏳ Qashqai (${cfg.consumQ}l): mai ai ${kmToProfit(ecoQ, cfg.consumQ)} până la profit net (${ecoQ.toFixed(0)} RON)`);
             setStyleColor('statEconomyQashqai', 'var(--warn)');
         }
         if (ecoF >= 0) {
             setTxt('statEconomyFord', `🟢 +${ecoF.toFixed(0)} RON economisiți față de Ford (${cfg.consumF}l/100km)`);
             setStyleColor('statEconomyFord', 'var(--accent)');
         } else {
-            setTxt('statEconomyFord', `⏳ Ford (${cfg.consumF}l): mai ai ~${Math.ceil((Math.abs(ecoF) / (cfg.consumF * cfg.pretLitru)) * 100)} km până la profit net (${ecoF.toFixed(0)} RON)`);
+            setTxt('statEconomyFord', `⏳ Ford (${cfg.consumF}l): mai ai ${kmToProfit(ecoF, cfg.consumF)} până la profit net (${ecoF.toFixed(0)} RON)`);
             setStyleColor('statEconomyFord', 'var(--warn)');
         }
     }
@@ -1514,38 +1563,37 @@ function renderTableAndStats() {
                 if (socUsed > 0) {
                     const kwhBat = (socUsed / 100) * capUtil;
                     kwhPer100 = (kwhBat / dist) * 100;
-                } else {
-                    kwhPer100 = (log.kwh / dist) * 100;
-                }
+                } // else: unknown, shown as a dash and left as a gap in the chart
 
                 ronPer100 = (log.computedCost / dist) * 100;
                 chartLabels.push(dateStr);
-                chartKwhData.push(kwhPer100.toFixed(2));
+                chartKwhData.push(kwhPer100 === null ? null : kwhPer100.toFixed(2));
                 chartRonData.push(ronPer100.toFixed(2));
             }
         }
 
         const estBatEnergy = (log.kwh * (1 - cfg.pierderi / 100)).toFixed(1);
-        const condTemp = log.temp !== undefined && log.temp !== null ? `${log.temp}°C` : '—';
-        const condRoute = log.driveType || 'Mixt';
-        const condClim = log.climate || 'Oprit';
+        const condTemp = log.temp !== undefined && log.temp !== null ? `${esc(log.temp)}°C` : '—';
+        const condRoute = esc(log.driveType || 'Mixt');
+        const condClim = esc(log.climate || 'Oprit');
 
         let badgeHtml = '<span class="badge-source badge-home">🏡 Acasă</span>';
         if (log.chargeType === 'external') badgeHtml = '<span class="badge-source badge-external">⚡ Extern</span>';
         if (log.chargeType === 'subscription') badgeHtml = '<span class="badge-source badge-sub">📜 Abonament</span>';
+        if (log.planGap) badgeHtml += ' <span class="badge-source badge-external" title="Data nu intră în niciun abonament configurat; costul nu este calculat">⚠ în afara planului</span>';
 
         row.innerHTML = `
             <td>${dateStr}</td>
-            <td>${log.km.toLocaleString('ro-RO')}</td>
-            <td>${log.batteryStart}% → ${log.batteryEnd}%</td>
-            <td><strong>${log.kwh}</strong> <span style="font-size:11px; color:var(--text-muted)">(${estBatEnergy} bat)</span></td>
+            <td>${Number(log.km).toLocaleString('ro-RO')}</td>
+            <td>${esc(log.batteryStart)}% → ${esc(log.batteryEnd)}%</td>
+            <td><strong>${esc(log.kwh)}</strong> <span style="font-size:11px; color:var(--text-muted)">(${estBatEnergy} bat)</span></td>
             <td>${badgeHtml}</td>
             <td><span style="font-size:12px;">🌡️ ${condTemp} | 🛣️ ${condRoute} | ❄️ ${condClim}</span></td>
             <td>${log.computedCost.toFixed(2)} RON</td>
             <td>${renderKwhBadge(kwhPer100)}</td>
             <td style="white-space:nowrap;">
-                <button class="btn-edit" data-id="${log.id}">✏️ Edit</button>
-                <button class="btn-delete" data-id="${log.id}">Șterge</button>
+                <button class="btn-edit" data-id="${esc(log.id)}">✏️ Edit</button>
+                <button class="btn-delete" data-id="${esc(log.id)}">Șterge</button>
             </td>
         `;
         
@@ -1584,6 +1632,7 @@ function renderMonthlyAggregates() {
                 costTotal: 0,
                 segmentKwhBat: 0,
                 segmentKm: 0,
+                socKm: 0,
                 logs: []
             };
         }
@@ -1611,8 +1660,7 @@ function renderMonthlyAggregates() {
         const socUsed = prevLog.batteryEnd - log.batteryStart;
         if (socUsed > 0) {
             monthlyMap[key].segmentKwhBat += (socUsed / 100) * capUtil;
-        } else {
-            monthlyMap[key].segmentKwhBat += Number(log.kwh);
+            monthlyMap[key].socKm += distance;
         }
     });
 
@@ -1624,7 +1672,7 @@ function renderMonthlyAggregates() {
         const formattedMonth = monthName.charAt(0).toUpperCase() + monthName.slice(1);
 
         const distDriven = m.segmentKm;
-        const avgKwh100 = distDriven > 0 ? ((m.segmentKwhBat / distDriven) * 100).toFixed(2) : '—';
+        const avgKwh100 = m.socKm > 0 ? ((m.segmentKwhBat / m.socKm) * 100).toFixed(2) : '—';
         const avgRon100 = distDriven > 0 ? ((m.costTotal / distDriven) * 100).toFixed(2) : '—';
         const homePct = m.kwhTotal > 0 ? ((m.kwhHome / m.kwhTotal) * 100).toFixed(1) : '0.0';
 
@@ -1772,7 +1820,9 @@ if (exportCsvBtn) {
         let csv = '\uFEFFData,Km,Baterie Start (%),Baterie Final (%),kWh Priză,Temp (°C),Traseu,Climatizare,Sursă Încărcare,Cost Calculat (RON)\n';
         filtered.forEach(log => {
             const typeLabel = { home: 'Acasă', external: 'Extern', subscription: 'Abonament' }[log.chargeType] || 'Extern';
-            csv += `"${log.date}","${log.km}","${log.batteryStart}","${log.batteryEnd}","${log.kwh}","${log.temp !== undefined ? log.temp : ''}","${log.driveType || ''}","${log.climate || ''}","${typeLabel}","${log.computedCost.toFixed(2)}"\n`;
+            // quote, and neutralize spreadsheet formulas in free-text fields
+            const q = v => { let t = String(v ?? '').replace(/"/g, '""'); if (/^[=+\-@\t\r]/.test(t)) t = "'" + t; return `"${t}"`; };
+            csv += [q(log.date), q(log.km), q(log.batteryStart), q(log.batteryEnd), q(log.kwh), q(log.temp), q(log.driveType), q(log.climate), q(typeLabel), q(log.computedCost.toFixed(2))].join(',') + '\n';
         });
         const a = Object.assign(document.createElement('a'), {
             href: URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' })),
