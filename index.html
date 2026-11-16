@@ -189,21 +189,6 @@
         }
         .stat-card p.sub { font-size: 13px; font-weight: 500; margin-top: 5px; color: var(--text-muted); }
 
-        .progress-wrap {
-            background: var(--border);
-            border-radius: 10px;
-            height: 10px;
-            margin-top: 10px;
-            overflow: hidden;
-        }
-        .progress-bar {
-            height: 100%;
-            background: var(--accent);
-            border-radius: 10px;
-            width: 0%;
-            transition: width 0.5s ease, background 0.3s;
-        }
-
         .panel {
             background: var(--surface);
             border: 1px solid var(--border);
@@ -366,7 +351,7 @@
 <body>
 
 <header class="app-header">
-    <h1>⚡ Jurnal Zoe <span class="badge">Pro v6.3 - Real Efficiency</span></h1>
+    <h1>⚡ Jurnal Zoe <span class="badge">Pro v6.4 - Subscription Fix</span></h1>
     <div class="header-actions">
         <button class="btn btn-quick" id="quickAddBtn" title="Pre-completează din ultima încărcare">⚡ Rapid</button>
         <button class="btn btn-theme" id="themeToggle" title="Schimbă tema">🌙</button>
@@ -490,7 +475,7 @@
                             <select id="useSubscription">
                                 <option value="home" selected>🏡 Acasă (tarif automat din setări)</option>
                                 <option value="external">⚡ Extern (cost introdus manual)</option>
-                                <option value="subscription">📜 Abonament (istoric vechi)</option>
+                                <option value="subscription">📜 Abonament (kWh incluși)</option>
                             </select>
                         </div>
                         <div class="form-group full" id="customCostContainer" style="display:none;">
@@ -550,7 +535,7 @@
                     </table>
                 </div>
                 
-                <!-- TEXT BLOCK FOR TOTALS -->
+                <!-- Totaluri filtrate -->
                 <div id="filteredTotals" style="margin-top: 12px; font-size: 14px; font-weight: 700; text-align: right; color: var(--text-main);">
                     Total filtrat: 0.00 kWh | 0.00 RON
                 </div>
@@ -603,8 +588,14 @@
 
     <!-- TAB 4: COSTURI -->
     <div id="tab-costuri" class="tab-content">
-        <p class="section-label">Defalcare Cheltuieli & Preț Mediu</p>
+        <p class="section-label">Stare Abonament & Defalcare Cheltuieli</p>
         <div class="stats-grid">
+            <div class="stat-card full" style="border-left-color: var(--info); background-color: var(--surface-alt);">
+                <h3>📜 Status Abonament Activ</h3>
+                <p id="statSubscriptionStatus">Folosiți: 0.0 / 120 kWh (Rămași: 120.0 kWh)</p>
+                <p class="sub" id="statSubscriptionStatusSub">—</p>
+            </div>
+
             <div class="stat-card" style="border-left-color: var(--accent)">
                 <h3>Cheltuieli Acasă</h3>
                 <p id="statCostHomeTotal">0.00 RON</p>
@@ -616,7 +607,7 @@
                 <p class="sub" id="statKwhExternalTotal">0.0 kWh tot timpul</p>
             </div>
             <div class="stat-card" style="border-left-color: var(--warn)">
-                <h3>Abonament istoric</h3>
+                <h3>Abonament</h3>
                 <p id="statCostSubscriptionTotal">0.00 RON</p>
                 <p class="sub" id="statKwhSubscriptionTotal">0.0 kWh din abonament</p>
             </div>
@@ -625,8 +616,8 @@
                 <p id="statAvgPricePerKwh">0.00 RON</p>
                 <p class="sub">Total RON / Total kWh</p>
             </div>
-            <div class="stat-card" style="border-left-color: var(--warn)">
-                <h3>Echivalent Acasă</h3>
+            <div class="stat-card full" style="border-left-color: var(--warn)">
+                <h3>Echivalent Acasă (Toată energia)</h3>
                 <p id="statHomeCostEstimate">0.00 RON</p>
                 <p class="sub" id="statHomeTariffSub">La tarif de 1.3155 RON/kWh</p>
             </div>
@@ -694,15 +685,26 @@
                         <input type="number" id="cfgTarifAcasa" value="1.3155" step="0.0001" min="0">
                     </div>
                     <div class="form-group">
-                        <label>Cost abonament lunar vechi (RON)</label>
+                        <label>Cost abonament (RON)</label>
                         <input type="number" id="cfgCostAbo" value="200" step="1">
                     </div>
                     <div class="form-group">
-                        <label>Ultima zi cu abonament</label>
-                        <input type="date" id="cfgAbonamentPanaLa" value="2026-09-30">
+                        <label>Mod calcul abonament</label>
+                        <select id="cfgModAbonament">
+                            <option value="monthly">Ciclu lunar (se reînnoiește în ziua de start)</option>
+                            <option value="bundle">Pachet kWh (se reînnoiește doar la epuizarea kWh)</option>
+                        </select>
                     </div>
                     <div class="form-group">
-                        <label>kWh incluse abonament lunar</label>
+                        <label>Ziua de start abonament (1–28)</label>
+                        <input type="number" id="cfgZiStart" value="1" min="1" max="28">
+                    </div>
+                    <div class="form-group">
+                        <label>Ultima zi cu abonament</label>
+                        <input type="date" id="cfgAbonamentPanaLa" value="2026-12-31">
+                    </div>
+                    <div class="form-group">
+                        <label>kWh incluși în abonament</label>
                         <input type="number" id="cfgKwhIncluse" value="120" step="1">
                     </div>
                     <div class="form-group">
@@ -777,6 +779,7 @@ function parseDate(dateVal) {
     return new Date();
 }
 
+// Configurație implicită
 let cfg = {
     capNominal: 23.3, 
     soh: 88, 
@@ -784,9 +787,10 @@ let cfg = {
     costAbo: 200, 
     kwhIncluse: 120, 
     tarifDep: 2.0, 
-    ziStart: 14,
+    ziStart: 1,
+    modAbonament: 'monthly',
     tarifAcasa: 1.3155,
-    abonamentPanaLa: '2026-09-30',
+    abonamentPanaLa: '2026-12-31',
     pretLitru: 7.2, 
     dailyKm: 35, 
     consumQ: 7.4, 
@@ -806,7 +810,7 @@ const db = firebase.firestore();
 const collectionRef = db.collection('incarcari_zoe');
 const configDocRef = db.collection('config_zoe').doc('main');
 
-// Tab Navigation Logic
+// Navigare Tab-uri
 document.querySelectorAll('.nav-tab').forEach(btn => {
     btn.addEventListener('click', () => {
         document.querySelectorAll('.nav-tab').forEach(b => b.classList.remove('active'));
@@ -824,19 +828,21 @@ document.querySelectorAll('.nav-tab').forEach(btn => {
 configDocRef.onSnapshot(doc => {
     if (doc.exists) {
         cfg = { ...cfg, ...doc.data() };
-        if (!cfg.abonamentPanaLa) cfg.abonamentPanaLa = '2026-09-30';
+        if (!cfg.modAbonament) cfg.modAbonament = 'monthly';
         syncCfgToInputs();
         if (currentLogs.length > 0) renderApp(currentLogs);
     }
 });
 
 async function saveCfg() {
-    ['capNominal','soh','pierderi','costAbo','kwhIncluse','tarifDep','tarifAcasa','pretLitru','dailyKm','consumQ','consumF'].forEach(k => {
+    ['capNominal','soh','pierderi','costAbo','kwhIncluse','tarifDep','ziStart','tarifAcasa','pretLitru','dailyKm','consumQ','consumF'].forEach(k => {
         const el = document.getElementById('cfg' + k.charAt(0).toUpperCase() + k.slice(1));
         if (el) cfg[k] = Number(el.value);
     });
     const abonamentPanaLa = document.getElementById('cfgAbonamentPanaLa');
     if (abonamentPanaLa) cfg.abonamentPanaLa = abonamentPanaLa.value;
+    const modAbonamentEl = document.getElementById('cfgModAbonament');
+    if (modAbonamentEl) cfg.modAbonament = modAbonamentEl.value;
     
     try {
         await configDocRef.set(cfg, { merge: true });
@@ -849,7 +855,7 @@ async function saveCfg() {
 
 function syncCfgToInputs() {
     const map = { CapNominal:'capNominal', Soh:'soh', Pierderi:'pierderi', CostAbo:'costAbo', 
-                  KwhIncluse:'kwhIncluse', TarifDep:'tarifDep', TarifAcasa:'tarifAcasa', 
+                  KwhIncluse:'kwhIncluse', TarifDep:'tarifDep', ZiStart:'ziStart', TarifAcasa:'tarifAcasa', 
                   PretLitru:'pretLitru', DailyKm:'dailyKm', ConsumQ:'consumQ', ConsumF:'consumF' };
     Object.entries(map).forEach(([suffix, key]) => {
         const el = document.getElementById('cfg' + suffix);
@@ -857,6 +863,8 @@ function syncCfgToInputs() {
     });
     const abonamentPanaLa = document.getElementById('cfgAbonamentPanaLa');
     if (abonamentPanaLa) abonamentPanaLa.value = cfg.abonamentPanaLa || '';
+    const modAbonamentEl = document.getElementById('cfgModAbonament');
+    if (modAbonamentEl) modAbonamentEl.value = cfg.modAbonament || 'monthly';
 }
 
 let chartInstance = null;
@@ -1097,7 +1105,8 @@ function getSubscriptionCycleKey(dateVal) {
     const d = parseDate(dateVal);
     let year = d.getFullYear();
     let month = d.getMonth();
-    if (d.getDate() < Number(cfg.ziStart || 1)) {
+    const startDay = Math.min(28, Math.max(1, Number(cfg.ziStart || 1)));
+    if (d.getDate() < startDay) {
         month -= 1;
         if (month < 0) { month = 11; year -= 1; }
     }
@@ -1107,22 +1116,41 @@ function getSubscriptionCycleKey(dateVal) {
 function renderApp(logs) {
     const cycleTracker = {};
     const activeCycles = new Set();
+    let bundleUsedKwh = 0;
 
     processedLogs = logs.map(log => {
         const chargeType = log.chargeType || (log.isSubscription ? 'subscription' : 'external');
         const cycleKey = getSubscriptionCycleKey(log.date);
         let sessionCost = 0;
         let subscriptionBaseCost = 0;
+        const isWithinSubDate = !cfg.abonamentPanaLa || log.date.slice(0, 10) <= cfg.abonamentPanaLa;
         
-        if (chargeType === 'subscription' && (!cfg.abonamentPanaLa || log.date.slice(0, 10) <= cfg.abonamentPanaLa)) {
-            activeCycles.add(cycleKey);
-            const prev = cycleTracker[cycleKey] || 0;
-            const next = prev + Number(log.kwh);
-            if (prev === 0) subscriptionBaseCost = Number(cfg.costAbo) || 0;
-            if (next > cfg.kwhIncluse) {
-                sessionCost = Math.min(Number(log.kwh), next - cfg.kwhIncluse) * cfg.tarifDep;
+        if (chargeType === 'subscription' && isWithinSubDate) {
+            if (cfg.modAbonament === 'bundle') {
+                // Mod Pachet kWh: se taxează o singură dată la începerea pachetului și nu se reînnoiește
+                // până când nu se consumă toți kWh incluși (cfg.kwhIncluse).
+                if (bundleUsedKwh === 0) {
+                    subscriptionBaseCost = Number(cfg.costAbo) || 0;
+                }
+                const nextBundle = bundleUsedKwh + Number(log.kwh);
+                if (nextBundle >= cfg.kwhIncluse) {
+                    const overKwh = nextBundle - cfg.kwhIncluse;
+                    sessionCost = overKwh * (Number(cfg.tarifDep) || 0);
+                    bundleUsedKwh = 0; // Pachet epuizat; următoarea încărcare va deschide un pachet nou
+                } else {
+                    bundleUsedKwh = nextBundle;
+                }
+            } else {
+                // Mod Ciclu Lunar: se taxează o singură dată pe ciclu (începând cu cfg.ziStart)
+                activeCycles.add(cycleKey);
+                const prev = cycleTracker[cycleKey] || 0;
+                const next = prev + Number(log.kwh);
+                if (prev === 0) subscriptionBaseCost = Number(cfg.costAbo) || 0;
+                if (next > cfg.kwhIncluse) {
+                    sessionCost = Math.min(Number(log.kwh), next - cfg.kwhIncluse) * (Number(cfg.tarifDep) || 0);
+                }
+                cycleTracker[cycleKey] = next;
             }
-            cycleTracker[cycleKey] = next;
         } else if (chargeType === 'home') {
             sessionCost = Number(log.kwh) * Number(log.unitPrice ?? cfg.tarifAcasa);
         } else {
@@ -1130,6 +1158,19 @@ function renderApp(logs) {
         }
         return { ...log, chargeType, computedCost: sessionCost + subscriptionBaseCost, cycleKey };
     });
+
+    // Actualizare card status abonament în Tab Costuri
+    if (cfg.modAbonament === 'bundle') {
+        const rem = Math.max(0, cfg.kwhIncluse - bundleUsedKwh);
+        setTxt('statSubscriptionStatus', `Folosiți din pachet: ${bundleUsedKwh.toFixed(1)} / ${cfg.kwhIncluse} kWh (Rămași: ${rem.toFixed(1)} kWh)`);
+        setTxt('statSubscriptionStatusSub', `Mod Pachet kWh — nu se retaxează până la epuizarea celor ${cfg.kwhIncluse} kWh.`);
+    } else {
+        const currentCycleKey = getSubscriptionCycleKey(new Date());
+        const usedCurrent = cycleTracker[currentCycleKey] || 0;
+        const rem = Math.max(0, cfg.kwhIncluse - usedCurrent);
+        setTxt('statSubscriptionStatus', `Folosiți în ciclul curent: ${usedCurrent.toFixed(1)} / ${cfg.kwhIncluse} kWh (Rămași: ${rem.toFixed(1)} kWh)`);
+        setTxt('statSubscriptionStatusSub', `Mod Ciclu Lunar — se reînnoiește în ziua ${cfg.ziStart || 1} a lunii.`);
+    }
 
     populateMonthFilterOptions(processedLogs);
     renderGeneralStats(processedLogs, activeCycles);
@@ -1192,7 +1233,6 @@ function renderGeneralStats(logs, activeCycles) {
                 const socUsed = prevLog.batteryEnd - log.batteryStart;
                 let kwhPer100Segment = 0;
                 
-                // MODIFIED: Calcul bazat pe diferența reală de SOC fără pierderi AC adăugate
                 if (socUsed > 0) {
                     const kwhBat = (socUsed / 100) * capUtil;
                     kwhPer100Segment = (kwhBat / dist) * 100;
@@ -1225,10 +1265,8 @@ function renderGeneralStats(logs, activeCycles) {
 
     if (logs.length > 1) {
         totalDistAll = logs[logs.length - 1].km - logs[0].km;
-        if (totalDistAll > 0) {
-            // Recalculating overall average based on battery consumption for the metric
-            const sumKwhBat = validKwhList.reduce((acc, curr) => acc + curr, 0) / (validKwhList.length || 1);
-            avgConsumption = sumKwhBat; // Using the average of all segment consumptions
+        if (totalDistAll > 0 && validKwhList.length > 0) {
+            avgConsumption = validKwhList.reduce((acc, curr) => acc + curr, 0) / validKwhList.length;
         }
     }
 
@@ -1287,21 +1325,15 @@ function renderGeneralStats(logs, activeCycles) {
     const m5Val = last5.length > 0 ? (last5.reduce((a, b) => a + b, 0) / last5.length).toFixed(1) : '—';
     setTxt('statMovingAvgs', `M3: ${m3Val} | M5: ${m5Val} kWh/100km`);
 
-    // Using battery kwh for seasons to match the new metric
     let winterBatKwh = 0;
     let summerBatKwh = 0;
     logs.forEach((log, i) => {
-        if(i > 0) {
+        if (i > 0) {
             const prevLog = logs[i - 1];
             const dist = log.km - prevLog.km;
-            if(dist > 0) {
+            if (dist > 0) {
                 const socUsed = prevLog.batteryEnd - log.batteryStart;
-                let kwhBatSegment = 0;
-                if(socUsed > 0) {
-                    kwhBatSegment = (socUsed / 100) * capUtil;
-                } else {
-                    kwhBatSegment = log.kwh; // Fallback
-                }
+                const kwhBatSegment = socUsed > 0 ? (socUsed / 100) * capUtil : log.kwh;
                 const month = parseDate(log.date).getMonth() + 1;
                 if ([11, 12, 1, 2, 3].includes(month)) {
                     winterBatKwh += kwhBatSegment;
@@ -1368,13 +1400,10 @@ function renderTableAndStats() {
     });
 
     const chartLabels = [], chartKwhData = [], chartRonData = [];
-    
-    // Variables to track totals for the current filter
     let sumKwh = 0;
     let sumCost = 0;
 
     filtered.forEach((log) => {
-        // Add to totals
         sumKwh += Number(log.kwh);
         sumCost += Number(log.computedCost);
 
@@ -1392,7 +1421,6 @@ function renderTableAndStats() {
                 const capUtil = cfg.capNominal * (cfg.soh / 100);
                 const socUsed = prevLog.batteryEnd - log.batteryStart;
                 
-                // MODIFIED: Calcul bazat pe consumul real de energie din baterie
                 if (socUsed > 0) {
                     const kwhBat = (socUsed / 100) * capUtil;
                     kwhPer100 = (kwhBat / dist) * 100;
@@ -1431,11 +1459,9 @@ function renderTableAndStats() {
             </td>
         `;
         
-        // Changed appendChild to prepend so newest entries go to the top visually
         tbody.prepend(row);
     });
 
-    // Update the totals text block underneath the table
     const totalsEl = document.getElementById('filteredTotals');
     if (totalsEl) {
         totalsEl.innerHTML = `Total filtrat: <span style="color:var(--accent)">${sumKwh.toFixed(2)} kWh</span> | <span style="color:var(--purple)">${sumCost.toFixed(2)} RON</span>`;
@@ -1492,12 +1518,11 @@ function renderMonthlyAggregates() {
         const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
         monthlyMap[key].segmentKm += distance;
         
-        // MODIFIED: Use battery kwh for the monthly average as well
         const socUsed = prevLog.batteryEnd - log.batteryStart;
         if (socUsed > 0) {
             monthlyMap[key].segmentKwhBat += (socUsed / 100) * capUtil;
         } else {
-             monthlyMap[key].segmentKwhBat += Number(log.kwh);
+            monthlyMap[key].segmentKwhBat += Number(log.kwh);
         }
     });
 
